@@ -40,7 +40,7 @@ jobs:
       - uses: julia-actions/julia-runtest@master
         continue-on-error: ${{ matrix.os == 'windows-latest' }}
         env:
-          MUJOCOJL_TEST_KEY: ${{ secrets.MJKEY }}
+          MUJOCOJL_TEST_KEY: ${{ secrets.MUJOCOJL_TEST_KEY }}
           DISPLAY: ':99'
 
 
