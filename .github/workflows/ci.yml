@@ -1,0 +1,47 @@
+name: CI
+
+on: [push, pull_request, repository_dispatch]
+
+jobs:
+  test:
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - ubuntu-16.04
+          - macOS-latest
+          - windows-latest
+        julia-arch:
+          - x64
+        julia-version:
+          - '1.3.0'
+    steps:
+      - name:  Setup virtual display
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt update
+          sudo apt install xorg-dev xvfb
+          sudo Xvfb :99 -screen 0 1024x768x24 &
+        shell: bash
+      - uses: actions/checkout@v1.0.0
+      - uses: julia-actions/setup-julia@latest
+        with:
+          version: ${{ matrix.julia-version }}
+          arch: ${{ matrix.julia-arch }}
+      - name: Add registry
+        run: |
+          julia --color=yes --project -e 'using Pkg; Registry.add(RegistrySpec(url="https://github.com/Lyceum/LyceumRegistry.git"))'
+          julia --color=yes --project -e 'using Pkg; Registry.add(RegistrySpec(url="https://github.com/JuliaRegistries/General.git"))'
+        shell: bash
+      - uses: julia-actions/julia-buildpkg@master
+      - uses: julia-actions/julia-runtest@master
+        continue-on-error: ${{ matrix.os == 'windows-latest' }}
+        env:
+          MUJOCOJL_TEST_KEY: ${{ secrets.MUJOCOJL_TEST_KEY }}
+          DISPLAY: ':99'
+
+
+
