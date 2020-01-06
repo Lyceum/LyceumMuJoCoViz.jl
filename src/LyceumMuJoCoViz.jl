@@ -348,7 +348,7 @@ function runmode!(e::Engine)
             worldt = time(e.timer)
             wallt = time()
             sim = getsim(phys.model)
-            dt = effective_timestep(sim)
+            dt = timestep(sim)
 
             # TODO yes, this is a funkly loop, and should be revisited
             # conditioning the loop/branches on e.ui.reversed results in some
