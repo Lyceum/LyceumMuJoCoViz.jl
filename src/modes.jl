@@ -76,7 +76,7 @@ end
 
 getT(m::Playback) = size(m.trajectories[m.k], 2)
 
-setstate!(p::Playback, phys, k, t) = reset!(phys.model, view(p.trajectories[p.k], :, p.t))
+setstate!(p::Playback, phys, k, t) = LyceumMuJoCo.setstate!(phys.model, view(p.trajectories[p.k], :, p.t))
 
 function burstmodeparams(phys, trajectories)
     sim = getsim(phys.model)
@@ -91,7 +91,7 @@ end
 
 function setup!(ui::UIState, phys::PhysicsState, p::Playback)
     traj, state, T = getcurrent(p)
-    reset!(phys.model, state)
+    LyceumMuJoCo.setstate!(phys.model, state)
     par = burstmodeparams(phys, traj)
     p.burstfactor = par.minburst + (par.maxburst - par.minburst) / 4
 end

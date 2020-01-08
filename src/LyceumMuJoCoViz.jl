@@ -10,7 +10,6 @@ using StaticArrays: SVector, MVector
 using Printf
 using Observables
 using FFMPEG
-import LyceumBase: reset!
 
 const FONTSCALE = MJCore.FONTSCALE_150 # can be 100, 150, 200
 const MAXGEOM = 10000 # preallocated geom array in mjvScene

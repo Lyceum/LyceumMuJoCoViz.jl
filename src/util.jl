@@ -65,7 +65,7 @@ function burst!(
     scn = ui.scn
     T = size(states, 2)
 
-    reset!(getsim(phys.model), view(states, :, t))
+    LyceumMuJoCo.setstate!(getsim(phys.model), view(states, :, t))
     mjv_updateScene(
         getsim(phys.model).m,
         getsim(phys.model).d,
@@ -96,7 +96,7 @@ function burst!(
     fromidx = scn[].ngeom + 1
     for tprime in Iterators.map(x -> round(Int, x), LinRange(1, T, n))
         tprime == t && continue
-        reset!(getsim(phys.model), view(states, :, tprime))
+        LyceumMuJoCo.setstate!(getsim(phys.model), view(states, :, tprime))
         mjv_addGeoms(
             getsim(phys.model).m,
             getsim(phys.model).d,
@@ -108,7 +108,7 @@ function burst!(
         color!(tprime)
     end
 
-    reset!(getsim(phys.model), view(states, :, t))
+    LyceumMuJoCo.setstate!(getsim(phys.model), view(states, :, t))
 end
 
 #include("../scratch.jl")
