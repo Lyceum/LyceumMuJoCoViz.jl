@@ -1,6 +1,6 @@
-name = "LyceumViz"
-uuid = "a1178c53-d320-4ec4-b60e-765dae4c6b59"
-authors = ["Colin Summers", "The Contributors of LyceumViz", "The Contributors of LyceumViz"]
+name = "LyceumMuJoCoViz"
+uuid = "409fd311-7925-44f6-a514-6be572b34fdd"
+authors = ["Colin Summers", "The Contributors of LyceumMuJoCoViz"]
 version = "0.1.0"
 
 [deps]

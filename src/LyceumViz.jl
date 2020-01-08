@@ -1,4 +1,4 @@
-module LyceumViz
+module LyceumMuJoCoViz
 
 using Base: RefValue
 import GLFW
@@ -91,7 +91,7 @@ mutable struct Engine{T,M<:Tuple}
     vidframe::Vector{UInt8}
 
     function Engine(model::Union{MJSim,AbstractMuJoCoEnv}, modes::EngineMode...)
-        window = create_window("LyceumViz")
+        window = create_window("LyceumMuJoCoViz")
         try
             phys = PhysicsState(model)
             ui = UIState()

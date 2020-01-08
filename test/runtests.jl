@@ -1,6 +1,6 @@
-using LyceumViz
+using LyceumMuJoCoViz
 using Test
 
-@testset "LyceumViz.jl" begin
+@testset "LyceumMuJoCoViz.jl" begin
     # Write your own tests here.
 end
