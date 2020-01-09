@@ -6,11 +6,11 @@ using GLFW: Window, Key, Action, MouseButton
 using BangBang: @set!!
 using MuJoCo, MuJoCo.MJCore
 using LyceumMuJoCo, LyceumBase
+import LyceumMuJoCo: reset!
 using StaticArrays: SVector, MVector
 using Printf
 using Observables
 using FFMPEG
-import LyceumBase: reset!
 
 const FONTSCALE = MJCore.FONTSCALE_150 # can be 100, 150, 200
 const MAXGEOM = 10000 # preallocated geom array in mjvScene
@@ -22,14 +22,14 @@ const Maybe{T} = Union{T,Nothing}
 export visualize
 
 
-mutable struct PhysicsState{T<:Union{MJSim,AbstractMuJoCoEnv}}
+mutable struct PhysicsState{T<:Union{MJSim,AbstractMuJoCoEnvironment}}
     model::T
     pert::RefValue{mjvPerturb}
     paused::Bool
     shouldexit::Bool
     lock::ReentrantLock
 
-    function PhysicsState(model::Union{MJSim,AbstractMuJoCoEnv})
+    function PhysicsState(model::Union{MJSim,AbstractMuJoCoEnvironment})
         pert = Ref(mjvPerturb())
         mjv_defaultPerturb(pert)
         new{typeof(model)}(model, pert, true, false, ReentrantLock())
@@ -90,7 +90,7 @@ mutable struct Engine{T,M<:Tuple}
     ffmpegdst::Maybe{String}
     vidframe::Vector{UInt8}
 
-    function Engine(model::Union{MJSim,AbstractMuJoCoEnv}, modes::EngineMode...)
+    function Engine(model::Union{MJSim,AbstractMuJoCoEnvironment}, modes::EngineMode...)
         window = create_window("LyceumMuJoCoViz")
         try
             phys = PhysicsState(model)
@@ -182,7 +182,7 @@ function showinfo!(rect::MJCore.mjrRect, e::Engine)
     sim = getsim(phys.model)
     seekstart(io)
 
-    if phys.model isa AbstractMuJoCoEnv
+    if phys.model isa AbstractMuJoCoEnvironment
         name = string(Base.nameof(typeof(phys.model)))
         reward = getreward(phys.model)
         eval = geteval(phys.model)
@@ -348,7 +348,7 @@ function runmode!(e::Engine)
             worldt = time(e.timer)
             wallt = time()
             sim = getsim(phys.model)
-            dt = effective_timestep(sim)
+            dt = timestep(sim)
 
             # TODO yes, this is a funkly loop, and should be revisited
             # conditioning the loop/branches on e.ui.reversed results in some
@@ -420,7 +420,7 @@ function Base.run(engine::Engine)
 end
 
 function visualize(
-    model::Union{MJSim,AbstractMuJoCoEnv};
+    model::Union{MJSim,AbstractMuJoCoEnvironment};
     trajectories::Maybe{AbstractVector{<:AbstractMatrix}} = nothing,
     controller = nothing,
 )
