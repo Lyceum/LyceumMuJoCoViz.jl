@@ -55,7 +55,7 @@ LyceumBase.reset!(rt::RateTimer) = (rt.tlast = time_ns(); rt.elapsed = 0)
 function burst!(
     ui::UIState,
     phys::PhysicsState,
-    states::AbstractMatrix{Float64},
+    states::AbstractMatrix,
     n::Integer,
     t::Integer;
     gamma = 0.9995,
@@ -65,7 +65,7 @@ function burst!(
     scn = ui.scn
     T = size(states, 2)
 
-    LyceumMuJoCo.setstate!(getsim(phys.model), view(states, :, t))
+    LyceumMuJoCo.setstate!(phys.model, view(states, :, t))
     mjv_updateScene(
         getsim(phys.model).m,
         getsim(phys.model).d,
@@ -96,7 +96,7 @@ function burst!(
     fromidx = scn[].ngeom + 1
     for tprime in Iterators.map(x -> round(Int, x), LinRange(1, T, n))
         tprime == t && continue
-        LyceumMuJoCo.setstate!(getsim(phys.model), view(states, :, tprime))
+        LyceumMuJoCo.setstate!(phys.model, view(states, :, tprime))
         mjv_addGeoms(
             getsim(phys.model).m,
             getsim(phys.model).d,
@@ -108,10 +108,9 @@ function burst!(
         color!(tprime)
     end
 
-    LyceumMuJoCo.setstate!(getsim(phys.model), view(states, :, t))
+    LyceumMuJoCo.setstate!(phys.model, view(states, :, t))
 end
 
-#include("../scratch.jl")
 function startffmpeg(w, h, rate)
     dst = tempname()
     arg = `-y -f rawvideo -pixel_format rgb24 -video_size $(w)x$(h) -framerate $rate -i pipe:0 -preset fast -tune animation -threads 0 -vf "vflip" $(dst).mp4`

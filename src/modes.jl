@@ -76,7 +76,9 @@ end
 
 getT(m::Playback) = size(m.trajectories[m.k], 2)
 
-setstate!(p::Playback, phys, k, t) = LyceumMuJoCo.setstate!(phys.model, view(p.trajectories[p.k], :, p.t))
+function setstate!(p::Playback, phys, k, t)
+    LyceumMuJoCo.setstate!(phys.model, view(p.trajectories[p.k], :, p.t))
+end
 
 function burstmodeparams(phys, trajectories)
     sim = getsim(phys.model)
@@ -162,6 +164,7 @@ function handlers(ui::UIState, phys::PhysicsState, p::Playback)
             desc = "Cycle forwards through trajectories",
         ) do state, event
             p.k = inc(p.k, 1, length(p.trajectories))
+            p.t = checkbounds(Bool, p.trajectories[p.k], :, p.t) ? p.t : firstindex(p.trajectories[p.k])
             setstate!(p, phys, p.k, p.t)
         end,
         onkeypress(
@@ -169,61 +172,8 @@ function handlers(ui::UIState, phys::PhysicsState, p::Playback)
             desc = "Cycle backwards through trajectories",
         ) do state, event
             p.k = dec(p.k, 1, length(p.trajectories))
+            p.t = checkbounds(Bool, p.trajectories[p.k], :, p.t) ? p.t : firstindex(p.trajectories[p.k])
             setstate!(p, phys, p.k, p.t)
         end,
-
-
     ]
 end
-
-
-
-
-#struct Controller{F} <: EngineMode
-#    setcontrols!::F
-#    ctrl::Vector{MJCore.mjtNum}
-#    qfrc_applied::Vector{MJCore.mjtNum}
-#    xfrc_applied::Matrix{MJCore.mjtNum}
-#    thread::Union{Nothing, Task}
-#    lock::ReentrantLock
-#    function Controller(setcontrols!, ctrl, qfrc_applied, xfrc_applied)
-#        new(setcontrols!, ctrl, qfrc_applied, xfrc_applied, nothing, ReentrantLock())
-#    end
-#end
-#
-#reset!(p, ::Controller) = reset!(getsim(p.model))
-#nameof(::Controller) = "Controller"
-#
-#function runcontroller!(x::Controller, phys::PhysicsState)
-#    while !phys.shouldexit
-#        lock(x.lock)
-#        x.setcontrols!(ctrl, qfrc_applied, xfrc_applied, getsim(phys.model))
-#
-#        lock(phys.lock)
-#        sync!(phys, x)
-#        unlock(phys.lock)
-#
-#        unlock(x.lock)
-#
-#        sleep(0.001)
-#    end
-#end
-#
-#function setup!(ui::UIState, phys::PhysicsState, x::Controller)
-#    x.thread = Threads.@spawn runcontroller!(x, phys)
-#end
-#
-#function teardown!(ui::UIState, phys::PhysicsState, x::Controller)
-#    wait(x.thread)
-#    x.thread = nothing
-#end
-#
-#function sync!(p::PhysicsState, x::Controller)
-#    copyto!(getsim(p.model).d.ctrl, x.ctrl)
-#    copyto!(getsim(p.model).d.qfrc_applied, x.qfrc_applied)
-#    copyto!(getsim(p.model).d.xfrc_applied, x.xfrc_applied)
-#end
-#
-#pausestep!(p::PhysicsState, x::Controller) = pausestep!(p)
-#forwardstep!(p::PhysicsState, x::Controller) = forwardstep!(p)
-#reversestep!(p::PhysicsState, ::Controller) = nothing

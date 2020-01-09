@@ -6,6 +6,7 @@ using GLFW: Window, Key, Action, MouseButton
 using BangBang: @set!!
 using MuJoCo, MuJoCo.MJCore
 using LyceumMuJoCo, LyceumBase
+import LyceumMuJoCo: reset!
 using StaticArrays: SVector, MVector
 using Printf
 using Observables
@@ -21,14 +22,14 @@ const Maybe{T} = Union{T,Nothing}
 export visualize
 
 
-mutable struct PhysicsState{T<:Union{MJSim,AbstractMuJoCoEnv}}
+mutable struct PhysicsState{T<:Union{MJSim,AbstractMuJoCoEnvironment}}
     model::T
     pert::RefValue{mjvPerturb}
     paused::Bool
     shouldexit::Bool
     lock::ReentrantLock
 
-    function PhysicsState(model::Union{MJSim,AbstractMuJoCoEnv})
+    function PhysicsState(model::Union{MJSim,AbstractMuJoCoEnvironment})
         pert = Ref(mjvPerturb())
         mjv_defaultPerturb(pert)
         new{typeof(model)}(model, pert, true, false, ReentrantLock())
@@ -89,7 +90,7 @@ mutable struct Engine{T,M<:Tuple}
     ffmpegdst::Maybe{String}
     vidframe::Vector{UInt8}
 
-    function Engine(model::Union{MJSim,AbstractMuJoCoEnv}, modes::EngineMode...)
+    function Engine(model::Union{MJSim,AbstractMuJoCoEnvironment}, modes::EngineMode...)
         window = create_window("LyceumMuJoCoViz")
         try
             phys = PhysicsState(model)
@@ -181,7 +182,7 @@ function showinfo!(rect::MJCore.mjrRect, e::Engine)
     sim = getsim(phys.model)
     seekstart(io)
 
-    if phys.model isa AbstractMuJoCoEnv
+    if phys.model isa AbstractMuJoCoEnvironment
         name = string(Base.nameof(typeof(phys.model)))
         reward = getreward(phys.model)
         eval = geteval(phys.model)
@@ -419,7 +420,7 @@ function Base.run(engine::Engine)
 end
 
 function visualize(
-    model::Union{MJSim,AbstractMuJoCoEnv};
+    model::Union{MJSim,AbstractMuJoCoEnvironment};
     trajectories::Maybe{AbstractVector{<:AbstractMatrix}} = nothing,
     controller = nothing,
 )

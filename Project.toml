@@ -16,7 +16,6 @@ Shapes = "175de200-b73b-11e9-28b7-9b5b306cec37"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
-BangBang = "0.3.6"
 FFMPEG = "0.2.3"
 GLFW = "3.1"
 LyceumBase = "0.1"
