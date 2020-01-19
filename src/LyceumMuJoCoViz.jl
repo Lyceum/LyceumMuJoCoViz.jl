@@ -268,7 +268,7 @@ function showhelp!(rect::MJCore.mjrRect, e::Engine)
     info1 = join(view(helparr, 1:i), '\n')
     info2 = join(view(helparr, min(l, (i + 1)):l), '\n')
 
-    mjr_overlay(MJCore.FONT_SHADOW, MJCore.GRID_TOPLEFT, rect, info1, info2, e.ui.con)
+    mjr_overlay(MJCore.FONT_NORMAL, MJCore.GRID_TOPLEFT, rect, info1, info2, e.ui.con)
     rect
 end
 
@@ -376,7 +376,7 @@ function runmode!(e::Engine)
         finally
             unlock(phys.lock)
         end
-        sleep(0.0001) # TODO adaptive sleep? Or a "shouldrender" flag
+        yield()
     end
     e
 end
@@ -399,7 +399,7 @@ function runrender!(engine::Engine)
                 islocked(lck) &&
                 current_task() === lck.locked_by && unlock(engine.phys.lock)
             end
-            sleep(0.0001)
+            yield()
         end
     finally
         engine.phys.shouldexit = true
