@@ -180,7 +180,7 @@ function handlers(eng::Engine)
             end,
             onkeypress(GLFW.KEY_R, desc = "Toggle reverse") do state, event
                 ui.reversed = !ui.reversed
-                eng.timer.rate *= -1
+                #eng.timer.rate *= -1
             end,
             onkeypress(GLFW.KEY_ENTER, desc = "Toggle speed mode") do state, event
                 if ui.speedmode
