@@ -367,7 +367,7 @@ function runmode!(e::Engine)
             end
 
             unlock(phys.lock)
-            yield()
+            sleep(0.001)
         end
     finally
         e.phys.shouldexit = true
