@@ -9,6 +9,7 @@ using LyceumMuJoCo, LyceumBase
 import LyceumMuJoCo: reset!
 using StaticArrays: SVector, MVector
 using Printf
+using DocStringExtensions
 using Observables
 using FFMPEG
 
@@ -419,6 +420,42 @@ function Base.run(engine::Engine)
     engine
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Starts an interactive visualization of `model`, which can be either a valid subtype of
+`AbstractMuJoCoEnvironment` or just a `MJSim` simulation. The visualizer has several
+"modes" that allow you to visualize passive dynamics, play back recorded trajectories, and
+run a controller interactively. The passive dynamics mode depends only on `model` and is
+always available, while the other modes are specified by the keyword arguments below.
+
+For more information, see the on-screen help menu.
+
+# Keywords
+
+- `trajectories::AbstractVector{<:AbstractMatrix}`: a vector of trajectories, where each
+    trajectory is an AbstractMatrix of states with size `(length(statespace(model)), T)` and
+    `T` is the length of the trajectory. Note that each trajectory can have different length.
+- `controller`: a callback function with the signature `controller(model)`, called at each
+    timestep, that that applys a control input to the system.
+
+# Examples
+```julia
+using LyceumMuJoCo, LyceumMuJoCoViz
+env = LyceumMuJoCo.HopperV2()
+T = 100
+states = Array(undef, statespace(env), T)
+for t = 1:T
+    step!(env)
+    states[:, t] .= getstate(env)
+end
+visualize(
+    env,
+    trajectories=[states],
+    controller = env -> setaction!(env, rand(actionspace(env)))
+)
+```
+"""
 function visualize(
     model::Union{MJSim,AbstractMuJoCoEnvironment};
     trajectories::Maybe{AbstractVector{<:AbstractMatrix}} = nothing,
