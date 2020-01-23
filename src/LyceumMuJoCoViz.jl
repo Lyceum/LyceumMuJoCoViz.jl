@@ -341,6 +341,8 @@ function runmode!(e::Engine)
     reset!(e.timer)
     elapsedsim = 0
     dt = timestep(phys.model)
+    sleepfactor = 2
+    steps = 0
     try
         while !phys.shouldexit
             lock(phys.lock)
@@ -367,7 +369,13 @@ function runmode!(e::Engine)
             end
 
             unlock(phys.lock)
-            sleep(0.001)
+
+            steps = (steps + 1) % sleepfactor
+            if steps == 0
+                sleep(0.001)
+            else
+                yield()
+            end
         end
     finally
         e.phys.shouldexit = true
