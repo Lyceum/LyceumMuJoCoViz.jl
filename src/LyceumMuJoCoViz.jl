@@ -15,9 +15,8 @@ using FFMPEG
 
 const FONTSCALE = MJCore.FONTSCALE_150 # can be 100, 150, 200
 const MAXGEOM = 10000 # preallocated geom array in mjvScene
-const SYNCMISALIGN = 0.1  # maximum time mis-alignment before re-sync
+const MAXRUNLENGTH_SECONDS = 1 / 30 # maximum time sim thread should run before freeing lock
 
-const MAXRUNLENGTH_SECONDS = 1 / 60
 const Maybe{T} = Union{T,Nothing}
 
 export visualize
@@ -342,42 +341,46 @@ function runmode!(e::Engine)
     phys = e.phys
     reset!(e.timer)
     elapsedsim = 0
-    while !phys.shouldexit
-        lock(phys.lock)
-        try
-            curmode = mode(e)
-            worldt = time(e.timer)
-            wallt = time()
-            sim = getsim(phys.model)
-            dt = timestep(sim)
+    dt = timestep(phys.model)
+    sleepfactor = 2
+    steps = 0
+    try
+        while !phys.shouldexit
+            lock(phys.lock)
 
-            # TODO yes, this is a funkly loop, and should be revisited
-            # conditioning the loop/branches on e.ui.reversed results in some
-            # odd deadlock
+            e.timer.rate = abs(e.timer.rate) * (e.ui.reversed ? -1 : 1)
+            worldt = time(e.timer)
+
             if phys.paused
-                pausestep!(phys, curmode)
-            elseif elapsedsim > worldt
-                while abs(elapsedsim - worldt) > SYNCMISALIGN &&
-                      (time() - wallt) < MAXRUNLENGTH_SECONDS
-                    reversestep!(phys, curmode)
+                pausestep!(phys, mode(e))
+            elseif e.ui.reversed
+                wallt = time()
+                while elapsedsim > worldt && (time() - wallt) < MAXRUNLENGTH_SECONDS
+                    reversestep!(phys, mode(e))
                     worldt = time(e.timer)
                     elapsedsim -= dt
                 end
             else
-                while abs(elapsedsim - worldt) > SYNCMISALIGN &&
-                      (time() - wallt) < MAXRUNLENGTH_SECONDS
-                    forwardstep!(phys, curmode)
+                wallt = time()
+                while elapsedsim < worldt && (time() - wallt) < MAXRUNLENGTH_SECONDS
+                    forwardstep!(phys, mode(e))
                     worldt = time(e.timer)
                     elapsedsim += dt
                 end
             end
-        catch e
-            phys.shouldexit = true
-            rethrow(e)
-        finally
+
             unlock(phys.lock)
+
+            steps = (steps + 1) % sleepfactor
+            if steps == 0
+                sleep(0.001)
+            else
+                yield()
+            end
         end
-        yield()
+    finally
+        e.phys.shouldexit = true
+        safe_unlock(phys.lock)
     end
     e
 end
@@ -387,23 +390,19 @@ function runrender!(engine::Engine)
     try
         while !(GLFW.WindowShouldClose(engine.mngr.state.window) || engine.phys.shouldexit)
             t = time()
+
             lock(lck)
-            try
-                GLFW.PollEvents()
-                prepare!(engine)
-                unlock(lck)
-                render!(engine)
-            catch e
-                engine.phys.shouldexit = true
-                rethrow(e)
-            finally
-                islocked(lck) &&
-                current_task() === lck.locked_by && unlock(engine.phys.lock)
-            end
-            yield()
+            GLFW.PollEvents()
+            prepare!(engine)
+            unlock(lck)
+
+            render!(engine)
+
+            sleep(0.001)
         end
     finally
         engine.phys.shouldexit = true
+        safe_unlock(lck)
         GLFW.DestroyWindow(engine.mngr.state.window)
     end
     engine
@@ -414,9 +413,9 @@ function Base.run(engine::Engine)
     prepare!(engine)
     render!(engine)
     GLFW.ShowWindow(engine.mngr.state.window)
-    task = Threads.@spawn runmode!(engine)
+    modetask = Threads.@spawn runmode!(engine)
     runrender!(engine)
-    wait(task)
+    wait(modetask)
     engine
 end
 

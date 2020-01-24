@@ -133,3 +133,9 @@ SetWindowAttrib(window::GLFW.Window, attrib::Integer, value::Integer) = ccall(
     attrib,
     value,
 )
+
+function safe_unlock(lck::ReentrantLock)
+    if islocked(lck) && current_task() === lck.locked_by
+        unlock(lck)
+    end
+end
