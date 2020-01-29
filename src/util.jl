@@ -113,15 +113,14 @@ end
 
 function startffmpeg(w, h, rate)
     dst = tempname()
-    arg = `-y -f rawvideo -pixel_format rgb24 -video_size $(w)x$(h) -framerate $rate -i pipe:0 -preset fast -tune animation -threads 0 -vf "vflip" $(dst).mp4`
+    outrate = min(rate, 30) # max out at 30 FPS
+    arg = `-y -f rawvideo -pixel_format rgb24 -video_size $(w)x$(h) -framerate $rate -use_wallclock_as_timestamps true -i pipe:0 -preset veryfast -tune animation -crf 27 -vf "vflip" -r $outrate $(dst).mp4`
+
     withenv(FFMPEG.execenv) do
-        #return open(`$(FFMPEG.ffmpeg) $arg`, write=true, read=false), dst
         in = Base.PipeEndpoint()
         p = Base._spawn(`$(FFMPEG.ffmpeg) $arg`, Any[in, devnull, devnull])
         p.in = in
         return p, dst
-#        p = Base._spawn(`$(FFMPEG.ffmpeg) $arg`, Any[in, stdout, stderr])
-
     end
 end
 
