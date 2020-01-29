@@ -15,7 +15,7 @@ using FFMPEG
 
 const FONTSCALE = MJCore.FONTSCALE_150 # can be 100, 150, 200
 const MAXGEOM = 10000 # preallocated geom array in mjvScene
-const MAXRUNLENGTH_SECONDS = 1 / 30 # maximum time sim thread should run before freeing lock
+const MIN_REFRESHRATE = 30 # minimum effective refreshrate
 
 const Maybe{T} = Union{T,Nothing}
 
@@ -27,12 +27,12 @@ mutable struct PhysicsState{T<:Union{MJSim,AbstractMuJoCoEnvironment}}
     pert::RefValue{mjvPerturb}
     paused::Bool
     shouldexit::Bool
-    lock::ReentrantLock
+    lock::Threads.SpinLock
 
     function PhysicsState(model::Union{MJSim,AbstractMuJoCoEnvironment})
         pert = Ref(mjvPerturb())
         mjv_defaultPerturb(pert)
-        new{typeof(model)}(model, pert, true, false, ReentrantLock())
+        new{typeof(model)}(model, pert, true, false, Threads.SpinLock())
     end
 end
 
@@ -50,6 +50,7 @@ Base.@kwdef mutable struct UIState
     speedfactor::Float64 = 1 / 10
     reversed::Bool = false
 
+    lastrender::Float64 = time()
     msgbuf::IOBuffer = IOBuffer()
     miscbuf::IOBuffer = IOBuffer()
 end
@@ -336,46 +337,40 @@ function render!(e::Engine)
     e
 end
 
-# TODO remove try/catch once stable b/c perf
+
+
 function runmode!(e::Engine)
     phys = e.phys
     reset!(e.timer)
-    elapsedsim = 0
     dt = timestep(phys.model)
-    sleepfactor = 2
-    steps = 0
+    elapsedsim = zero(typeof(dt))
+
     try
         while !phys.shouldexit
-            lock(phys.lock)
-
-            e.timer.rate = abs(e.timer.rate) * (e.ui.reversed ? -1 : 1)
-            worldt = time(e.timer)
-
-            if phys.paused
-                pausestep!(phys, mode(e))
-            elseif e.ui.reversed
-                wallt = time()
-                while elapsedsim > worldt && (time() - wallt) < MAXRUNLENGTH_SECONDS
-                    reversestep!(phys, mode(e))
-                    worldt = time(e.timer)
-                    elapsedsim -= dt
-                end
+            # TODO atomic?
+            if (time() - e.ui.lastrender) > 1/MIN_REFRESHRATE
+                # If current refresh rate less than minimum, then busy wait to give
+                # render thread a chance to acquire lock
+                continue
             else
-                wallt = time()
-                while elapsedsim < worldt && (time() - wallt) < MAXRUNLENGTH_SECONDS
+                lock(phys.lock)
+
+                # make sure world clock moving in right direction
+                e.timer.rate = abs(e.timer.rate) * (e.ui.reversed ? -1 : 1)
+                elapsedworld = time(e.timer)
+
+                # advance sim
+                if phys.paused
+                    pausestep!(phys, mode(e))
+                elseif e.ui.reversed && elapsedsim > elapsedworld
+                    reversestep!(phys, mode(e))
+                    elapsedsim -= dt
+                elseif !e.ui.reversed && elapsedsim < elapsedworld
                     forwardstep!(phys, mode(e))
-                    worldt = time(e.timer)
                     elapsedsim += dt
                 end
-            end
 
-            unlock(phys.lock)
-
-            steps = (steps + 1) % sleepfactor
-            if steps == 0
-                sleep(0.001)
-            else
-                yield()
+                unlock(phys.lock)
             end
         end
     finally
@@ -385,35 +380,36 @@ function runmode!(e::Engine)
     e
 end
 
+
+function renderstep!(e::Engine)
+    lock(e.phys.lock)
+    GLFW.PollEvents()
+    prepare!(e)
+    e.ui.lastrender = time()
+    unlock(e.phys.lock)
+
+    render!(e)
+end
+
 function runrender!(engine::Engine)
     lck = engine.phys.lock
     try
         while !(GLFW.WindowShouldClose(engine.mngr.state.window) || engine.phys.shouldexit)
-            t = time()
-
-            lock(lck)
-            GLFW.PollEvents()
-            prepare!(engine)
-            unlock(lck)
-
-            render!(engine)
-
-            sleep(0.001)
+            renderstep!(engine)
         end
     finally
         engine.phys.shouldexit = true
-        safe_unlock(lck)
+        safe_unlock(engine.phys.lock)
         GLFW.DestroyWindow(engine.mngr.state.window)
     end
     engine
 end
 
 
-function Base.run(engine::Engine)
-    prepare!(engine)
-    render!(engine)
-    GLFW.ShowWindow(engine.mngr.state.window)
+function run(engine::Engine)
+    renderstep!(engine) # Render initial state before showing window
     modetask = Threads.@spawn runmode!(engine)
+    GLFW.ShowWindow(engine.mngr.state.window)
     runrender!(engine)
     wait(modetask)
     engine

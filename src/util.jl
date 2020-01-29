@@ -138,3 +138,23 @@ function safe_unlock(lck::ReentrantLock)
         unlock(lck)
     end
 end
+
+function safe_unlock(lck::Threads.SpinLock)
+    # TODO doesn't check which thread locked it
+    unlock(lck)
+end
+
+"""
+    spinwait(delay)
+
+Spin in a tight loop for at least `delay` seconds.
+
+Note this function is only accurate on the order of approximately `@elapsed time()`
+seconds.
+"""
+@inline function spinwait(dt::Real)
+    dt > 0 || error("dt must be > 0")
+    t0 = time()
+    while time() - t0 < dt end
+    nothing
+end
