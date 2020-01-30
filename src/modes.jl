@@ -12,7 +12,6 @@ nameof(::EngineMode) = error("must implement")
 setup!(ui, phys, ::EngineMode) = nothing
 teardown!(ui, phys, ::EngineMode) = nothing
 prepare!(ui, phys, ::EngineMode) = nothing
-postrender!(ui, ::EngineMode) = nothing
 handlers(ui, phys, ::EngineMode) = nothing
 modeinfo(io, ui, phys, ::EngineMode) = nothing
 supportsreverse(::EngineMode) = false
@@ -128,7 +127,6 @@ function prepare!(ui::UIState, phys::PhysicsState, p::Playback)
     end
 end
 
-postrender!(::UIState, ::Playback) = nothing
 nameof(::Playback) = "Playback"
 
 function modeinfo(io, ui, phys, m::Playback)

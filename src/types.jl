@@ -84,7 +84,7 @@ mutable struct Engine{T,M<:Tuple}
                 modehandlerdesc = String(take!(writedescription!(io, curhandlers)))
             end
 
-            eng = new{typeof(model),typeof(modes)}(
+            e = new{typeof(model),typeof(modes)}(
                 phys,
                 ui,
                 mngr,
@@ -101,15 +101,15 @@ mutable struct Engine{T,M<:Tuple}
                 UInt8[],
             )
 
-            enginehandlers = handlers(eng)
+            enginehandlers = handlers(e)
             enginehandlers = convert(Vector{<:AbstractEventHandler}, enginehandlers)
             writedescription!(io, enginehandlers)
-            eng.handlerdescription = String(take!(io))
+            e.handlerdescription = String(take!(io))
 
             register!(mngr, enginehandlers)
-            on((_) -> render!(eng), mngr.events.windowrefresh)
-            on((o) -> default_mousecb(eng, o.state, o.event), mngr.events.doubleclick)
-            return eng
+            on((_) -> render!(e), mngr.events.windowrefresh)
+            on((o) -> default_mousecb(e, o.state, o.event), mngr.events.doubleclick)
+            return e
         catch e
             GLFW.DestroyWindow(window)
             rethrow(e)

@@ -6,22 +6,25 @@ import GLFW
 using GLFW: Window, Key, Action, MouseButton
 using BangBang: @set!!
 using StaticArrays: SVector, MVector
-using Printf
+using Printf: @printf
 using DocStringExtensions
-using Observables
-using FFMPEG
-
-using MuJoCo, MuJoCo.MJCore
-using LyceumMuJoCo, LyceumBase
+using Observables: on, off
+import FFMPEG
+using MuJoCo
+using MuJoCo.MJCore
+using LyceumMuJoCo
 import LyceumMuJoCo: reset!
+using LyceumBase
+using LyceumBase: Maybe, AbsVec, AbsMat
+
+
+export visualize
+
 
 const FONTSCALE = MJCore.FONTSCALE_150 # can be 100, 150, 200
 const MAXGEOM = 10000 # preallocated geom array in mjvScene
 const MIN_REFRESHRATE = 30 # minimum effective refreshrate
 
-const Maybe{T} = Union{T,Nothing}
-
-export visualize
 
 include("util.jl")
 include("glfw.jl")
@@ -76,38 +79,52 @@ function visualize(
     !isnothing(trajectories) && push!(modes, Playback{typeof(trajectories)}(trajectories))
     !isnothing(controller) && push!(modes, Controller(controller))
     reset!(model)
-    eng = Engine(model, modes...)
-    run(eng)
+    e = Engine(model, modes...)
+    run(e)
     nothing
 end
 
 
-function run(eng::Engine)
-    pausestep!(eng.phys, mode(eng))
-    renderstep!(eng)
+function run(e::Engine)
+    # render first frame before opening window
+    prepare!(e)
+    render!(e)
+    GLFW.ShowWindow(e.mngr.state.window)
 
-    modetask = Threads.@spawn runmode!(eng)
-
-    GLFW.ShowWindow(eng.mngr.state.window)
-
-    runrender!(eng)
+    # run the simulation/mode in second thread
+    modetask = Threads.@spawn runmode!(e)
+    runrender(e)
     wait(modetask)
-    eng
+
+    GLFW.DestroyWindow(e.mngr.state.window)
+    nothing
 end
 
 
-function runrender!(eng::Engine)
-    lck = eng.phys.lock
+function runrender(e::Engine)
     try
-        while !(GLFW.WindowShouldClose(eng.mngr.state.window) || eng.ui.shouldexit)
-            renderstep!(eng)
+        shouldexit = false
+        while !shouldexit
+            @lock e.phys.lock begin
+                GLFW.PollEvents()
+                prepare!(e)
+            end
+
+            render!(e)
+            lastrender = time()
+
+            @lock e.ui.lock begin
+                e.ui.lastrender = lastrender
+                shouldexit = e.ui.shouldexit |= GLFW.WindowShouldClose(e.mngr.state.window)
+            end
         end
     finally
-        eng.ui.shouldexit = true
-        safe_unlock(eng.phys.lock)
-        GLFW.DestroyWindow(eng.mngr.state.window)
+        @lock e.ui.lock begin
+            e.ui.shouldexit = true
+        end
     end
-    eng
+
+    nothing
 end
 
 function render!(e::Engine)
@@ -117,25 +134,15 @@ function render!(e::Engine)
 
     mjr_render(rect, e.ui.scn, e.ui.con)
 
-    postrender!(e.ui, mode(e))
     e.ui.showhelp && showhelp!(rect, e)
-    !isnothing(e.ffmpeghandle) && recordframe!(e, rect)
     e.ui.showinfo && showinfo!(rect, e)
+
+    # should happen last to include all overlays
+    !isnothing(e.ffmpeghandle) && recordframe!(e, rect)
 
     GLFW.SwapBuffers(e.mngr.state.window)
 
-    @lock e.ui.lock begin
-        e.ui.lastrender = time()
-    end
-
-end
-
-function renderstep!(e::Engine)
-    @lock e.phys.lock begin
-        GLFW.PollEvents()
-        prepare!(e)
-    end
-    render!(e)
+    e
 end
 
 function prepare!(e::Engine)
@@ -150,6 +157,7 @@ function prepare!(e::Engine)
         ui.scn,
     )
     prepare!(ui, phys, mode(e))
+
     e
 end
 
@@ -175,8 +183,6 @@ function runmode!(e::Engine)
                 continue
             else
                 @lock p.lock begin
-                    # make sure world clock moving in right direction
-                    p.timer.rate = abs(p.timer.rate) * (reversed ? -1 : 1)
                     elapsedworld = time(p.timer)
 
                     # advance sim
@@ -199,9 +205,5 @@ function runmode!(e::Engine)
     end
     e
 end
-
-
-
-
 
 end # module
