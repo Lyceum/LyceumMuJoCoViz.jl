@@ -97,25 +97,25 @@ function default_mousecb(e::Engine, s::WindowState, event::Doubleclick)
     end
 end
 
-function backstep_event(eng, phys)
+function backstep_event(eng)
     l1 = onkeypress(GLFW.KEY_LEFT) do state, event
-        phys.paused && for _ = 1:STEPSPERKEY
-            reversestep!(phys, mode(eng))
+        eng.ui.paused && for _ = 1:STEPSPERKEY
+            reversestep!(eng.phys, mode(eng))
         end
     end
     l2 = onevent(KeyRepeat, (s, e) -> e.key == GLFW.KEY_LEFT) do state, event
-        phys.paused && for _ = 1:STEPSPERKEY
-            reversestep!(phys, mode(eng))
+        eng.ui.paused && for _ = 1:STEPSPERKEY
+            reversestep!(eng.phys, mode(eng))
         end
     end
     l3 = onkeypress(GLFW.KEY_LEFT, MOD_SHIFT) do state, event
-        phys.paused && for _ = 1:SHIFTSTEPSPERKEY
-            reversestep!(phys, mode(eng))
+        eng.ui.paused && for _ = 1:SHIFTSTEPSPERKEY
+            reversestep!(eng.phys, mode(eng))
         end
     end
     l4 = onevent(KeyRepeat, (s, e) -> e.key == GLFW.KEY_LEFT && s.shift) do state, event
-        phys.paused && for _ = 1:SHIFTSTEPSPERKEY
-            reversestep!(phys, mode(eng))
+        eng.ui.paused && for _ = 1:SHIFTSTEPSPERKEY
+            reversestep!(eng.phys, mode(eng))
         end
     end
     MultiEventHandler(
@@ -124,25 +124,25 @@ function backstep_event(eng, phys)
     )
 end
 
-function forwardstep_event(eng, phys)
+function forwardstep_event(eng)
     r1 = onkeypress(GLFW.KEY_RIGHT) do state, event
-        phys.paused && for _ = 1:STEPSPERKEY
-            forwardstep!(phys, mode(eng))
+        eng.ui.paused && for _ = 1:STEPSPERKEY
+            forwardstep!(eng.phys, mode(eng))
         end
     end
     r2 = onevent(KeyRepeat, (s, e) -> e.key == GLFW.KEY_RIGHT) do state, event
-        phys.paused && for _ = 1:STEPSPERKEY
-            forwardstep!(phys, mode(eng))
+        eng.ui.paused && for _ = 1:STEPSPERKEY
+            forwardstep!(eng.phys, mode(eng))
         end
     end
     r3 = onkeypress(GLFW.KEY_RIGHT, MOD_SHIFT) do state, event
-        phys.paused && for _ = 1:SHIFTSTEPSPERKEY
-            forwardstep!(phys, mode(eng))
+        eng.ui.paused && for _ = 1:SHIFTSTEPSPERKEY
+            forwardstep!(eng.phys, mode(eng))
         end
     end
     r4 = onevent(KeyRepeat, (s, e) -> e.key == GLFW.KEY_RIGHT && s.shift) do state, event
-        phys.paused && for _ = 1:SHIFTSTEPSPERKEY
-            forwardstep!(phys, mode(eng))
+        eng.ui.paused && for _ = 1:SHIFTSTEPSPERKEY
+            forwardstep!(eng.phys, mode(eng))
         end
     end
     MultiEventHandler(
@@ -180,19 +180,19 @@ function handlers(eng::Engine)
             end,
             onkeypress(GLFW.KEY_R, desc = "Toggle reverse") do state, event
                 ui.reversed = !ui.reversed
-                #eng.timer.rate *= -1
+                #phys.timer.rate *= -1
             end,
             onkeypress(GLFW.KEY_ENTER, desc = "Toggle speed mode") do state, event
                 if ui.speedmode
                     ui.speedmode = false
-                    setrate!(eng.timer, 1)
+                    setrate!(phys.timer, 1)
                 else
                     ui.speedmode = true
-                    setrate!(eng.timer, ui.speedfactor)
+                    setrate!(phys.timer, ui.speedfactor)
                 end
             end,
             onkeypress(GLFW.KEY_ESCAPE, desc = "Quit") do _, _
-                phys.shouldexit = true
+                ui.shouldexit = true
             end,
 
             onkeypress(
@@ -203,8 +203,8 @@ function handlers(eng::Engine)
                 alignscale!(ui, sim)
             end,
 
-            forwardstep_event(eng, phys),
-            backstep_event(eng, phys),
+            forwardstep_event(eng),
+            backstep_event(eng),
 
 
 
@@ -241,12 +241,12 @@ function handlers(eng::Engine)
 
 
             onkeypress(GLFW.KEY_SPACE, desc = "Pause") do state, event
-                if phys.paused
-                    start!(eng.timer)
-                    phys.paused = false
+                if ui.paused
+                    start!(phys.timer)
+                    ui.paused = false
                 else
-                    stop!(eng.timer)
-                    phys.paused = true
+                    stop!(phys.timer)
+                    ui.paused = true
                 end
             end,
 
@@ -290,9 +290,9 @@ function handlers(eng::Engine)
             ) do state, event
                 if ui.speedmode
                     ui.speedfactor *= 2
-                    setrate!(eng.timer, ui.speedfactor)
+                    setrate!(phys.timer, ui.speedfactor)
                 else
-                    setrate!(eng.timer, 1)
+                    setrate!(phys.timer, 1)
                 end
             end,
             onkeypress(
@@ -302,9 +302,9 @@ function handlers(eng::Engine)
             ) do state, event
                 if ui.speedmode
                     ui.speedfactor /= 2
-                    setrate!(eng.timer, ui.speedfactor)
+                    setrate!(phys.timer, ui.speedfactor)
                 else
-                    setrate!(eng.timer, 1)
+                    setrate!(phys.timer, 1)
                 end
             end,
 

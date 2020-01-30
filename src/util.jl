@@ -51,66 +51,6 @@ start!(rt::RateTimer) = (rt.tlast = time_ns(); rt.paused = false)
 setrate!(rt::RateTimer, r) = rt.rate = r
 LyceumBase.reset!(rt::RateTimer) = (rt.tlast = time_ns(); rt.elapsed = 0)
 
-
-function burst!(
-    ui::UIState,
-    phys::PhysicsState,
-    states::AbstractMatrix,
-    n::Integer,
-    t::Integer;
-    gamma = 0.9995,
-    alphamin = 0.05,
-    alphamax = 0.55,
-)
-    scn = ui.scn
-    T = size(states, 2)
-
-    LyceumMuJoCo.setstate!(phys.model, view(states, :, t))
-    mjv_updateScene(
-        getsim(phys.model).m,
-        getsim(phys.model).d,
-        ui.vopt,
-        phys.pert,
-        ui.cam,
-        MJCore.mjCAT_ALL,
-        scn,
-    )
-
-    maxdist = max(t - 1, T - t)
-    from = scn[].ngeom + 1
-    function color!(tprime)
-        geoms = unsafe_wrap(Array, scn[].geoms, scn[].ngeom)
-        for i = from:scn[].ngeom
-            geom = geoms[i]
-            if geom.category == Int(MJCore.mjCAT_DYNAMIC)
-                dist = abs(tprime - t)
-                alpha = gamma^dist
-                r, g, b, _ = geom.rgba
-                geom = @set!! geom.rgba = SVector{4,Cfloat}(r, g, b, alpha)
-                geoms[i] = geom
-            end
-        end
-        from = scn[].ngeom + 1
-    end
-
-    fromidx = scn[].ngeom + 1
-    for tprime in Iterators.map(x -> round(Int, x), LinRange(1, T, n))
-        tprime == t && continue
-        LyceumMuJoCo.setstate!(phys.model, view(states, :, tprime))
-        mjv_addGeoms(
-            getsim(phys.model).m,
-            getsim(phys.model).d,
-            ui.vopt,
-            phys.pert,
-            MJCore.mjCAT_DYNAMIC,
-            scn,
-        )
-        color!(tprime)
-    end
-
-    LyceumMuJoCo.setstate!(phys.model, view(states, :, t))
-end
-
 function startffmpeg(w, h, rate)
     dst = tempname()
     outrate = min(rate, 30) # max out at 30 FPS

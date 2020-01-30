@@ -1,4 +1,6 @@
-abstract type EngineMode end
+####
+#### EngineMode
+####
 
 pausestep!(phys, ::EngineMode) = error("must implement")
 forwardstep!(phys, ::EngineMode) = error("must implement")
@@ -30,6 +32,9 @@ end
 reversestep!(p::PhysicsState) = nothing
 
 
+####
+#### PassiveDynamics
+####
 
 struct PassiveDynamics <: EngineMode end
 pausestep!(p::PhysicsState, ::PassiveDynamics) = pausestep!(p)
@@ -39,6 +44,9 @@ reset!(p, ::PassiveDynamics) = reset!(p.model)
 nameof(::PassiveDynamics) = "Passive Dynamics"
 
 
+####
+#### Controller
+####
 
 struct Controller{F} <: EngineMode
     controller::F
@@ -52,6 +60,9 @@ forwardstep!(p::PhysicsState, x::Controller) = (x.controller(p.model); forwardst
 reversestep!(p::PhysicsState, ::Controller) = nothing
 
 
+####
+#### Playback
+####
 
 mutable struct Playback{TR<:AbstractVector{<:AbstractMatrix{<:Real}}} <: EngineMode
     trajectories::TR
@@ -131,7 +142,7 @@ function handlers(ui::UIState, phys::PhysicsState, p::Playback)
     return [
         onkeypress(
             GLFW.KEY_B,
-            desc = "Toggle burst mode (when paused): render snapshots of entire trajectory",
+            desc = "Toggle burst mode: render snapshots of entire trajectory",
         ) do state, event
             p.burstmode = !p.burstmode
         end,
@@ -176,4 +187,63 @@ function handlers(ui::UIState, phys::PhysicsState, p::Playback)
             setstate!(p, phys, p.k, p.t)
         end,
     ]
+end
+
+function burst!(
+    ui::UIState,
+    phys::PhysicsState,
+    states::AbstractMatrix,
+    n::Integer,
+    t::Integer;
+    gamma = 0.9995,
+    alphamin = 0.05,
+    alphamax = 0.55,
+)
+    scn = ui.scn
+    T = size(states, 2)
+
+    LyceumMuJoCo.setstate!(phys.model, view(states, :, t))
+    mjv_updateScene(
+        getsim(phys.model).m,
+        getsim(phys.model).d,
+        ui.vopt,
+        phys.pert,
+        ui.cam,
+        MJCore.mjCAT_ALL,
+        scn,
+    )
+
+    maxdist = max(t - 1, T - t)
+    from = scn[].ngeom + 1
+    function color!(tprime)
+        geoms = unsafe_wrap(Array, scn[].geoms, scn[].ngeom)
+        for i = from:scn[].ngeom
+            geom = geoms[i]
+            if geom.category == Int(MJCore.mjCAT_DYNAMIC)
+                dist = abs(tprime - t)
+                alpha = gamma^dist
+                r, g, b, _ = geom.rgba
+                geom = @set!! geom.rgba = SVector{4,Cfloat}(r, g, b, alpha)
+                geoms[i] = geom
+            end
+        end
+        from = scn[].ngeom + 1
+    end
+
+    fromidx = scn[].ngeom + 1
+    for tprime in Iterators.map(x -> round(Int, x), LinRange(1, T, n))
+        tprime == t && continue
+        LyceumMuJoCo.setstate!(phys.model, view(states, :, tprime))
+        mjv_addGeoms(
+            getsim(phys.model).m,
+            getsim(phys.model).d,
+            ui.vopt,
+            phys.pert,
+            MJCore.mjCAT_DYNAMIC,
+            scn,
+        )
+        color!(tprime)
+    end
+
+    LyceumMuJoCo.setstate!(phys.model, view(states, :, t))
 end
