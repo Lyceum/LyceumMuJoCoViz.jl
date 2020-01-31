@@ -133,23 +133,23 @@ function handlers(ui::UIState, phys::PhysicsState, p::Playback)
         onkeypress(
             GLFW.KEY_B,
             desc = "Toggle burst mode: render snapshots of entire trajectory",
-        ) do state, event
+        ) do state, ev
             p.burstmode = !p.burstmode
         end,
-        onscroll(MOD_CONTROL, desc = "Change burst factor") do state, event
+        onscroll(MOD_CONTROL, desc = "Change burst factor") do state, ev
             traj, state, T = getcurrent(p)
             par = burstmodeparams(phys, traj)
             p.burstfactor = clamp(
-                p.burstfactor + Float64(sign(event.dy)) * par.scrollfactor,
+                p.burstfactor + Float64(sign(ev.dy)) * par.scrollfactor,
                 par.minburst,
                 par.maxburst,
             )
         end,
-        onscroll(MOD_SHIFT, desc = "Change burst decay rate") do state, event
+        onscroll(MOD_SHIFT, desc = "Change burst decay rate") do state, ev
             traj, state, T = getcurrent(p)
             par = burstmodeparams(phys, traj)
             p.burstgamma = clamp(
-                p.burstgamma + event.dy * par.gammascrollfactor,
+                p.burstgamma + ev.dy * par.gammascrollfactor,
                 par.mingamma,
                 1,
             )
@@ -158,7 +158,7 @@ function handlers(ui::UIState, phys::PhysicsState, p::Playback)
         onkeypress(
             GLFW.KEY_UP,
             desc = "Cycle forwards through trajectories",
-        ) do state, event
+        ) do state, ev
             p.k = inc(p.k, 1, length(p.trajectories))
             p.t = checkbounds(Bool, p.trajectories[p.k], :, p.t) ? p.t : firstindex(p.trajectories[p.k])
             setstate!(p, phys, p.k, p.t)
@@ -166,7 +166,7 @@ function handlers(ui::UIState, phys::PhysicsState, p::Playback)
         onkeypress(
             GLFW.KEY_DOWN,
             desc = "Cycle backwards through trajectories",
-        ) do state, event
+        ) do state, ev
             p.k = dec(p.k, 1, length(p.trajectories))
             p.t = checkbounds(Bool, p.trajectories[p.k], :, p.t) ? p.t : firstindex(p.trajectories[p.k])
             setstate!(p, phys, p.k, p.t)
