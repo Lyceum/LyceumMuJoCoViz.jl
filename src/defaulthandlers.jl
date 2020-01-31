@@ -1,22 +1,15 @@
 const STEPSPERKEY = 1
 const SHIFTSTEPSPERKEY = 50
 
-#action = Int(MJCore.mjMOUSE_MOVE_V)
-#if buttonright
-#    action = shift ? Int(MJCore.mjMOUSE_MOVE_H) : Int(MJCore.mjMOUSE_MOVE_V)
-#elseif buttonleft
-#    action = shift ? Int(MJCore.mjMOUSE_ROTATE_H) : Int(MJCore.mjMOUSE_ROTATE_V)
-#else
-#    action = Int(MJCore.mjMOUSE_ZOOM)
-#end
-
-#function move_pert_or_cam(ui::UIState, phys::PhysicsState, dx, dy, width, height, action::MJCore.mjtMouse)
 function move_pert_or_cam(
     ui::UIState,
     phys::PhysicsState,
     state::WindowState,
     event::MouseDrag,
 )
+    sim = getsim(phys.model)
+    scaled_dx, scaled_dy = event.dx / state.width, event.dy / state.height
+
     if state.right
         action = state.shift ? MJCore.mjMOUSE_MOVE_H : MJCore.mjMOUSE_MOVE_V
     elseif state.left
@@ -25,9 +18,6 @@ function move_pert_or_cam(
         action = MJCore.mjMOUSE_ZOOM
     end
 
-    # TODO width?
-    sim = getsim(phys.model)
-    scaled_dx, scaled_dy = event.dx / state.height, event.dy / state.height
     if iszero(phys.pert[].active)
         mjv_moveCamera(sim.m, action, scaled_dx, scaled_dy, ui.scn, ui.cam)
     else
@@ -35,14 +25,13 @@ function move_pert_or_cam(
     end
 end
 
-
 function default_mousecb(e::Engine, s::WindowState, event::Doubleclick)
     if isleft(event.button)
         selmode = 1
-    elseif isright(event.button) && s.control
-        selmode = 3 # CTRL + Right Click
-    else
-        selmode = 2 # Right Click
+    elseif (ismiddle(event.button) || isright(event.button)) && s.control
+        selmode = 3
+    elseif isright(event.button)
+        selmode = 2
     end
 
     # get current window size & cursor pos
@@ -97,25 +86,25 @@ function default_mousecb(e::Engine, s::WindowState, event::Doubleclick)
     end
 end
 
-function backstep_event(eng, phys)
+function backstep_event(e)
     l1 = onkeypress(GLFW.KEY_LEFT) do state, event
-        phys.paused && for _ = 1:STEPSPERKEY
-            reversestep!(phys, mode(eng))
+        e.ui.paused && for _ = 1:STEPSPERKEY
+            reversestep!(e.phys, mode(e))
         end
     end
     l2 = onevent(KeyRepeat, (s, e) -> e.key == GLFW.KEY_LEFT) do state, event
-        phys.paused && for _ = 1:STEPSPERKEY
-            reversestep!(phys, mode(eng))
+        e.ui.paused && for _ = 1:STEPSPERKEY
+            reversestep!(e.phys, mode(e))
         end
     end
     l3 = onkeypress(GLFW.KEY_LEFT, MOD_SHIFT) do state, event
-        phys.paused && for _ = 1:SHIFTSTEPSPERKEY
-            reversestep!(phys, mode(eng))
+        e.ui.paused && for _ = 1:SHIFTSTEPSPERKEY
+            reversestep!(e.phys, mode(e))
         end
     end
     l4 = onevent(KeyRepeat, (s, e) -> e.key == GLFW.KEY_LEFT && s.shift) do state, event
-        phys.paused && for _ = 1:SHIFTSTEPSPERKEY
-            reversestep!(phys, mode(eng))
+        e.ui.paused && for _ = 1:SHIFTSTEPSPERKEY
+            reversestep!(e.phys, mode(e))
         end
     end
     MultiEventHandler(
@@ -124,25 +113,25 @@ function backstep_event(eng, phys)
     )
 end
 
-function forwardstep_event(eng, phys)
+function forwardstep_event(e)
     r1 = onkeypress(GLFW.KEY_RIGHT) do state, event
-        phys.paused && for _ = 1:STEPSPERKEY
-            forwardstep!(phys, mode(eng))
+        e.ui.paused && for _ = 1:STEPSPERKEY
+            forwardstep!(e.phys, mode(e))
         end
     end
     r2 = onevent(KeyRepeat, (s, e) -> e.key == GLFW.KEY_RIGHT) do state, event
-        phys.paused && for _ = 1:STEPSPERKEY
-            forwardstep!(phys, mode(eng))
+        e.ui.paused && for _ = 1:STEPSPERKEY
+            forwardstep!(e.phys, mode(e))
         end
     end
     r3 = onkeypress(GLFW.KEY_RIGHT, MOD_SHIFT) do state, event
-        phys.paused && for _ = 1:SHIFTSTEPSPERKEY
-            forwardstep!(phys, mode(eng))
+        e.ui.paused && for _ = 1:SHIFTSTEPSPERKEY
+            forwardstep!(e.phys, mode(e))
         end
     end
     r4 = onevent(KeyRepeat, (s, e) -> e.key == GLFW.KEY_RIGHT && s.shift) do state, event
-        phys.paused && for _ = 1:SHIFTSTEPSPERKEY
-            forwardstep!(phys, mode(eng))
+        e.ui.paused && for _ = 1:SHIFTSTEPSPERKEY
+            forwardstep!(e.phys, mode(e))
         end
     end
     MultiEventHandler(
@@ -153,12 +142,12 @@ end
 
 
 
-function handlers(eng::Engine)
-    let eng = eng,
-        sim = getsim(eng.phys.model),
-        pert = eng.phys.pert,
-        ui = eng.ui,
-        phys = eng.phys
+function handlers(e::Engine)
+    let e = e,
+        sim = getsim(e.phys.model),
+        pert = e.phys.pert,
+        ui = e.ui,
+        phys = e.phys
 
         return [
             onkeypress(GLFW.KEY_F1, desc = "Toggle help") do state, event
@@ -167,32 +156,30 @@ function handlers(eng::Engine)
             onkeypress(GLFW.KEY_F2, desc = "Toggle simulation info") do state, event
                 ui.showinfo = !ui.showinfo
             end,
-            #onkeypress(GLFW.KEY_F3, desc="Toggle sensor info") do state, event
-            #    ui.showsensor = !ui.showsensor
-            #end,
             onkeypress(GLFW.KEY_F11, desc = "Toggle fullscreen") do state, event
                 ismax = GLFW.GetWindowAttrib(state.window, GLFW.MAXIMIZED)
                 iszero(ismax) ? GLFW.MaximizeWindow(state.window) :
                 GLFW.RestoreWindow(state.window)
             end,
             onkeypress(GLFW.KEY_BACKSPACE, desc = "Reset model") do _, _
-                reset!(phys, mode(eng))
+                reset!(phys, mode(e))
             end,
             onkeypress(GLFW.KEY_R, desc = "Toggle reverse") do state, event
                 ui.reversed = !ui.reversed
-                #eng.timer.rate *= -1
+                phys.timer.rate *= -1
+                resettime!(phys)
             end,
             onkeypress(GLFW.KEY_ENTER, desc = "Toggle speed mode") do state, event
                 if ui.speedmode
                     ui.speedmode = false
-                    setrate!(eng.timer, 1)
+                    setrate!(phys.timer, 1)
                 else
                     ui.speedmode = true
-                    setrate!(eng.timer, ui.speedfactor)
+                    setrate!(phys.timer, ui.speedfactor)
                 end
             end,
             onkeypress(GLFW.KEY_ESCAPE, desc = "Quit") do _, _
-                phys.shouldexit = true
+                ui.shouldexit = true
             end,
 
             onkeypress(
@@ -203,12 +190,8 @@ function handlers(eng::Engine)
                 alignscale!(ui, sim)
             end,
 
-            forwardstep_event(eng, phys),
-            backstep_event(eng, phys),
-
-
-
-
+            forwardstep_event(e),
+            backstep_event(e),
 
             onkeypress(GLFW.KEY_SEMICOLON, desc = "Cycle frame mode backwards") do _, _
                 ui.vopt[].frame = dec(ui.vopt[].frame, 0, Integer(MJCore.mjNFRAME) - 1)
@@ -224,34 +207,31 @@ function handlers(eng::Engine)
                 ui.vopt[].label = inc(ui.vopt[].label, 0, Integer(MJCore.mjNLABEL) - 1)
             end,
 
-
-
             onkeypress(
                 GLFW.KEY_PAGE_UP,
                 desc = "Cycle engine mode forward",
             ) do state, event
-                switchmode!(eng, inc(eng.curmodeidx, 1, length(eng.modes)))
+                switchmode!(e, inc(e.curmodeidx, 1, length(e.modes)))
             end,
             onkeypress(
                 GLFW.KEY_PAGE_DOWN,
                 desc = "Cycle engine mode backwards",
             ) do state, event
-                switchmode!(eng, dec(eng.curmodeidx, 1, length(eng.modes)))
+                switchmode!(e, dec(e.curmodeidx, 1, length(e.modes)))
             end,
 
-
             onkeypress(GLFW.KEY_SPACE, desc = "Pause") do state, event
-                if phys.paused
-                    start!(eng.timer)
-                    phys.paused = false
+                if ui.paused
+                    start!(phys.timer)
+                    ui.paused = false
                 else
-                    stop!(eng.timer)
-                    phys.paused = true
+                    stop!(phys.timer)
+                    ui.paused = true
                 end
             end,
 
             onkeypress(GLFW.KEY_V, desc = "Toggle video recording") do state, event
-                isnothing(eng.ffmpeghandle) ? startrecord!(eng) : finishrecord!(eng)
+                isnothing(e.ffmpeghandle) ? startrecord!(e) : finishrecord!(e)
             end,
 
             onevent(
@@ -290,9 +270,9 @@ function handlers(eng::Engine)
             ) do state, event
                 if ui.speedmode
                     ui.speedfactor *= 2
-                    setrate!(eng.timer, ui.speedfactor)
+                    setrate!(phys.timer, ui.speedfactor)
                 else
-                    setrate!(eng.timer, 1)
+                    setrate!(phys.timer, 1)
                 end
             end,
             onkeypress(
@@ -302,9 +282,9 @@ function handlers(eng::Engine)
             ) do state, event
                 if ui.speedmode
                     ui.speedfactor /= 2
-                    setrate!(eng.timer, ui.speedfactor)
+                    setrate!(phys.timer, ui.speedfactor)
                 else
-                    setrate!(eng.timer, 1)
+                    setrate!(phys.timer, 1)
                 end
             end,
 
