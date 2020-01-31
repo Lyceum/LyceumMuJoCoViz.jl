@@ -62,12 +62,12 @@ function showinfo!(rect::MJCore.mjrRect, e::Engine)
     println(
         io,
         "Frame rendering mode: ",
-        MJCore.CGlobals.mjFRAMESTRING[e.ui.vopt[].frame+1],
+        MJCore.mjFRAMESTRING[e.ui.vopt[].frame+1],
     )
     println(
         io,
         "Label rendering mode: ",
-        MJCore.CGlobals.mjLABELSTRING[e.ui.vopt[].label+1],
+        MJCore.mjLABELSTRING[e.ui.vopt[].label+1],
     )
     println(io)
 
