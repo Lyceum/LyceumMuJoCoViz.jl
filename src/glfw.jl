@@ -25,6 +25,16 @@ const PUNCTUATION = [
     MOD_SUPER = GLFW.MOD_SUPER
 end
 
+
+SetWindowAttrib(window::GLFW.Window, attrib::Integer, value::Integer) = ccall(
+    (:glfwSetWindowAttrib, GLFW.libglfw),
+    Cvoid,
+    (GLFW.Window, Cint, Cint),
+    window,
+    attrib,
+    value,
+)
+
 function default_windowsize()
     vmode = GLFW.GetVideoMode(GLFW.GetPrimaryMonitor())
     (width = trunc(Int, 2 * vmode.width / 3), height = trunc(Int, 2 * vmode.height / 3))
@@ -263,7 +273,7 @@ function events(we::WindowEvents)
     Tuple(getfield(we, name) for (T, name) in zip(
         fieldtypes(WindowEvents),
         fieldnames(WindowEvents),
-    ) if T <: Observables.AbstractObservable)
+    ) if T <: AbstractObservable)
 end
 
 mutable struct WindowManager

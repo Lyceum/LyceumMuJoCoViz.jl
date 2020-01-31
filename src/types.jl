@@ -5,12 +5,12 @@ mutable struct PhysicsState{T<:Union{MJSim,AbstractMuJoCoEnvironment}}
     pert::RefValue{mjvPerturb}
     elapsedsim::Float64
     timer::RateTimer
-    lock::Threads.SpinLock
+    lock::ReentrantLock
 
     function PhysicsState(model::Union{MJSim,AbstractMuJoCoEnvironment})
         pert = Ref(mjvPerturb())
         mjv_defaultPerturb(pert)
-        new{typeof(model)}(model, pert, 0, RateTimer(), Threads.SpinLock())
+        new{typeof(model)}(model, pert, 0, RateTimer(), ReentrantLock())
     end
 end
 
@@ -32,10 +32,12 @@ Base.@kwdef mutable struct UIState
     shouldexit::Bool = false
 
     lastrender::Float64 = 0
+    refreshrate::Float64 = 0
+    realtimerate::Float64 = 0
     msgbuf::IOBuffer = IOBuffer()
     miscbuf::IOBuffer = IOBuffer()
 
-    lock::Threads.SpinLock = Threads.SpinLock()
+    lock::ReentrantLock = ReentrantLock()
 end
 
 mutable struct Engine{T,M<:Tuple}

@@ -8,7 +8,7 @@ using BangBang: @set!!
 using StaticArrays: SVector, MVector
 using Printf: @printf
 using DocStringExtensions
-using Observables: on, off
+using Observables: AbstractObservable, Observable, on, off
 import FFMPEG
 using MuJoCo
 using MuJoCo.MJCore
@@ -23,7 +23,8 @@ export visualize
 
 const FONTSCALE = MJCore.FONTSCALE_150 # can be 100, 150, 200
 const MAXGEOM = 10000 # preallocated geom array in mjvScene
-const MIN_REFRESHRATE = 30 # minimum effective refreshrate
+const MIN_REFRESHRATE = 20 # minimum effective refreshrate
+const GAMMA = 0.9 # decay rate for online stats
 
 
 include("util.jl")
@@ -96,7 +97,6 @@ function run(e::Engine)
     runrender(e)
     wait(modetask)
 
-    GLFW.DestroyWindow(e.mngr.state.window)
     nothing
 end
 
@@ -104,17 +104,21 @@ end
 function runrender(e::Engine)
     try
         shouldexit = false
+
         while !shouldexit
             @lock e.phys.lock begin
                 GLFW.PollEvents()
                 prepare!(e)
             end
 
+            yield()
+
             render!(e)
-            lastrender = time()
+            trender = time()
 
             @lock e.ui.lock begin
-                e.ui.lastrender = lastrender
+                e.ui.refreshrate = 1 / (trender - e.ui.lastrender)
+                e.ui.lastrender = trender
                 shouldexit = e.ui.shouldexit |= GLFW.WindowShouldClose(e.mngr.state.window)
             end
         end
@@ -122,6 +126,7 @@ function runrender(e::Engine)
         @lock e.ui.lock begin
             e.ui.shouldexit = true
         end
+        GLFW.DestroyWindow(e.mngr.state.window)
     end
 
     nothing
@@ -166,8 +171,7 @@ function runmode!(e::Engine)
     p = e.phys
     ui = e.ui
 
-    reset!(p.timer)
-    p.elapsedsim = 0
+    resettime!(p) # reset sim and world clocks to 0
 
     try
         while true
@@ -178,8 +182,9 @@ function runmode!(e::Engine)
             if shouldexit
                 break
             elseif (time() - lastrender) > 1/MIN_REFRESHRATE
-                # If current refresh rate less than minimum, then busy wait to give
+                # If current refresh rate less than minimum, then yield to give
                 # render thread a chance to acquire lock
+                yield()
                 continue
             else
                 @lock p.lock begin
@@ -203,7 +208,8 @@ function runmode!(e::Engine)
             ui.shouldexit = true
         end
     end
-    e
+
+    nothing
 end
 
 end # module

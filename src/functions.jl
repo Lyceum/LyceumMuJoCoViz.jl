@@ -1,3 +1,14 @@
+####
+#### PhysicsState
+####
+
+resettime!(phys::PhysicsState) = (reset!(phys.timer); phys.elapsedsim = 0)
+
+
+####
+#### UIState
+####
+
 function alignscale!(ui::UIState, sim::MJSim)
     ui.cam[].lookat = sim.m.stat.center
     ui.cam[].distance = 1.5 * sim.m.stat.extent
@@ -5,7 +16,11 @@ function alignscale!(ui::UIState, sim::MJSim)
     ui
 end
 
-mode(e::Engine, idx = e.curmodeidx) = e.modes[idx]
+####
+#### Engine
+####
+
+@inline mode(e::Engine, idx::Integer = e.curmodeidx) = e.modes[idx]
 
 function switchmode!(e::Engine, idx::Integer)
     io = e.ui.miscbuf
@@ -24,6 +39,7 @@ function switchmode!(e::Engine, idx::Integer)
         register!(e.mngr, newhandlers)
         e.modehandlers = newhandlers
     end
+
     e.curmodeidx = idx
     setup!(e.ui, e.phys, mode(e))
 
@@ -31,8 +47,11 @@ function switchmode!(e::Engine, idx::Integer)
 end
 
 function showinfo!(rect::MJCore.mjrRect, e::Engine)
-    io, ui, phys = e.ui.miscbuf, e.ui, e.phys
+    io = e.ui.miscbuf
+    ui = e.ui
+    phys = e.phys
     sim = getsim(phys.model)
+
     seekstart(io)
 
     if phys.model isa AbstractMuJoCoEnvironment
@@ -53,9 +72,9 @@ function showinfo!(rect::MJCore.mjrRect, e::Engine)
 
     if ui.speedmode
         if ui.speedfactor < 1
-            @printf io " (%.2fx slower than realtime)\n" 1 / ui.speedfactor
+            @printf io " (%.3fx slower than realtime)\n" 1 / ui.speedfactor
         else
-            @printf io " (%.2fx faster than realtime)\n" ui.speedfactor
+            @printf io " (%.3fx faster than realtime)\n" ui.speedfactor
         end
     end
 
@@ -71,29 +90,18 @@ function showinfo!(rect::MJCore.mjrRect, e::Engine)
     )
     println(io)
 
-
     println(io, "Engine Mode: $(nameof(mode(e))).")
     modeinfo(io, ui, phys, mode(e))
     println(io, "Options:")
     write(io, e.modehandlerdescription)
     infostr = chomp(String(take!(io)))
 
-    # TODO revist this
-    #if e.ui.msgbuf.size > 0
-    #    println(io, "Messages:")
-    #    write(io, take!(e.ui.msgbuf))
-    #    msgstr = chomp(String(take!(io)))
-    #else
-    #    msgstr = ""
-    #end
-    msgstr = ""
-
     mjr_overlay(
         MJCore.FONT_NORMAL,
         MJCore.GRID_BOTTOMLEFT,
         rect,
         string(chomp(infostr)),
-        string(chomp(msgstr)),
+        "",
         ui.con,
     )
     rect

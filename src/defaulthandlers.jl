@@ -35,14 +35,13 @@ function move_pert_or_cam(
     end
 end
 
-
 function default_mousecb(e::Engine, s::WindowState, event::Doubleclick)
     if isleft(event.button)
         selmode = 1
-    elseif isright(event.button) && s.control
-        selmode = 3 # CTRL + Right Click
-    else
-        selmode = 2 # Right Click
+    elseif (ismiddle(event.button) || isright(event.button)) && s.control
+        selmode = 3
+    elseif isright(event.button)
+        selmode = 2
     end
 
     # get current window size & cursor pos
@@ -76,6 +75,7 @@ function default_mousecb(e::Engine, s::WindowState, event::Doubleclick)
 
         # switch to tracking camera
         if selmode == 3 && selbody >= 0
+            @warn "TRACKING"
             e.ui.cam[].type = Int(MJCore.mjCAMERA_TRACKING)
             e.ui.cam[].trackbodyid = selbody
             e.ui.cam[].fixedcamid = -1
@@ -167,9 +167,6 @@ function handlers(e::Engine)
             onkeypress(GLFW.KEY_F2, desc = "Toggle simulation info") do state, event
                 ui.showinfo = !ui.showinfo
             end,
-            #onkeypress(GLFW.KEY_F3, desc="Toggle sensor info") do state, event
-            #    ui.showsensor = !ui.showsensor
-            #end,
             onkeypress(GLFW.KEY_F11, desc = "Toggle fullscreen") do state, event
                 ismax = GLFW.GetWindowAttrib(state.window, GLFW.MAXIMIZED)
                 iszero(ismax) ? GLFW.MaximizeWindow(state.window) :
@@ -181,6 +178,7 @@ function handlers(e::Engine)
             onkeypress(GLFW.KEY_R, desc = "Toggle reverse") do state, event
                 ui.reversed = !ui.reversed
                 phys.timer.rate *= -1
+                resettime!(phys)
             end,
             onkeypress(GLFW.KEY_ENTER, desc = "Toggle speed mode") do state, event
                 if ui.speedmode

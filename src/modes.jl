@@ -2,13 +2,14 @@
 #### EngineMode
 ####
 
-pausestep!(phys, ::EngineMode) = error("must implement")
 forwardstep!(phys, ::EngineMode) = error("must implement")
-reversestep!(phys, ::EngineMode) = error("must implement")
-reset!(phys, ::EngineMode) = error("must implement")
+function reversestep!(phys, m::EngineMode)
+    supportsreverse(m) ? error("must implement") : nothing
+end
 
-nameof(::EngineMode) = error("must implement")
-
+pausestep!(phys, ::EngineMode) = nothing
+reset!(phys, ::EngineMode) = reset!(phys.model)
+nameof(m::EngineMode) = string(Base.nameof(typeof(m)))
 setup!(ui, phys, ::EngineMode) = nothing
 teardown!(ui, phys, ::EngineMode) = nothing
 prepare!(ui, phys, ::EngineMode) = nothing
@@ -28,7 +29,6 @@ function forwardstep!(p::PhysicsState)
     mjv_applyPerturbForce(sim.m, sim.d, p.pert)
     step!(p.model)
 end
-reversestep!(p::PhysicsState) = nothing
 
 
 ####
@@ -36,27 +36,31 @@ reversestep!(p::PhysicsState) = nothing
 ####
 
 struct PassiveDynamics <: EngineMode end
-pausestep!(p::PhysicsState, ::PassiveDynamics) = pausestep!(p)
 forwardstep!(p::PhysicsState, ::PassiveDynamics) = forwardstep!(p)
-reversestep!(p::PhysicsState, ::PassiveDynamics) = reversestep!(p)
-reset!(p, ::PassiveDynamics) = reset!(p.model)
-nameof(::PassiveDynamics) = "Passive Dynamics"
 
 
 ####
 #### Controller
 ####
 
-struct Controller{F} <: EngineMode
+mutable struct Controller{F} <: EngineMode
     controller::F
+    realtimefactor::Float64
+end
+Controller(controller) = Controller(controller, 1.0)
+
+teardown!(ui, phys, x::Controller) = zerofullctrl!(getsim(phys.model))
+
+function forwardstep!(p::PhysicsState, x::Controller)
+    dt = @elapsed x.controller(p.model);
+    rt = timestep(p.model) / dt
+    x.realtimefactor = GAMMA * x.realtimefactor + (1 - GAMMA) * rt
+    forwardstep!(p)
 end
 
-reset!(p, ::Controller) = reset!(p.model)
-nameof(::Controller) = "Controller"
-teardown!(ui, phys, x::Controller) = zerofullctrl!(getsim(phys.model))
-pausestep!(p::PhysicsState, x::Controller) = pausestep!(p)
-forwardstep!(p::PhysicsState, x::Controller) = (x.controller(p.model); forwardstep!(p))
-reversestep!(p::PhysicsState, ::Controller) = nothing
+function modeinfo(io, ui, phys, x::Controller)
+    @printf io " (Realtime Factor: %.2fx\n" x.realtimefactor
+end
 
 
 ####
@@ -108,12 +112,13 @@ function setup!(ui::UIState, phys::PhysicsState, p::Playback)
     p.burstfactor = par.minburst + (par.maxburst - par.minburst) / 4
 end
 
-pausestep!(phys::PhysicsState, p::Playback) = nothing
 function forwardstep!(phys::PhysicsState, p::Playback)
+    spinwait(0.05)
     p.t = inc(p.t, 1, getT(p))
     setstate!(p, phys, p.k, p.t)
 end
 function reversestep!(phys::PhysicsState, p::Playback)
+    spinwait(0.05)
     p.t = dec(p.t, 1, getT(p))
     setstate!(p, phys, p.k, p.t)
 end
@@ -126,8 +131,6 @@ function prepare!(ui::UIState, phys::PhysicsState, p::Playback)
         burst!(ui, phys, traj, n, p.t, gamma = p.burstgamma)
     end
 end
-
-nameof(::Playback) = "Playback"
 
 function modeinfo(io, ui, phys, m::Playback)
     println(io, "t=$(m.t)/$(getT(m))    k=$(m.k)/$(length(m.trajectories))")

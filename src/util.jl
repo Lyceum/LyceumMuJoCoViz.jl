@@ -64,25 +64,12 @@ function startffmpeg(w, h, rate)
     end
 end
 
-SetWindowAttrib(window::GLFW.Window, attrib::Integer, value::Integer) = ccall(
-    (:glfwSetWindowAttrib, GLFW.libglfw),
-    Cvoid,
-    (GLFW.Window, Cint, Cint),
-    window,
-    attrib,
-    value,
-)
-
 function safe_unlock(lck::ReentrantLock)
     if islocked(lck) && current_task() === lck.locked_by
         unlock(lck)
     end
 end
 
-function safe_unlock(lck::Threads.SpinLock)
-    # TODO doesn't check which thread locked it
-    unlock(lck)
-end
 
 """
     spinwait(delay)
