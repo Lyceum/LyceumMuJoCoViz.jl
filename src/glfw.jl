@@ -25,15 +25,20 @@ const PUNCTUATION = [
     MOD_SUPER = GLFW.MOD_SUPER
 end
 
+function SetWindowAttrib(window::GLFW.Window, attrib::Integer, value::Integer)
+    ccall(
+        (:glfwSetWindowAttrib, GLFW.libglfw),
+        Cvoid,
+        (GLFW.Window, Cint, Cint),
+        window,
+        attrib,
+        value,
+    )
+end
 
-SetWindowAttrib(window::GLFW.Window, attrib::Integer, value::Integer) = ccall(
-    (:glfwSetWindowAttrib, GLFW.libglfw),
-    Cvoid,
-    (GLFW.Window, Cint, Cint),
-    window,
-    attrib,
-    value,
-)
+function GetRefreshRate(monitor::GLFW.Monitor=GLFW.GetPrimaryMonitor())
+    GLFW.GetVideoMode(monitor).refreshrate
+end
 
 function default_windowsize()
     vmode = GLFW.GetVideoMode(GLFW.GetPrimaryMonitor())

@@ -24,11 +24,13 @@ export visualize
 const FONTSCALE = MJCore.FONTSCALE_150 # can be 100, 150, 200
 const MAXGEOM = 10000 # preallocated geom array in mjvScene
 const MIN_REFRESHRATE = 20 # minimum effective refreshrate
-const GAMMA = 0.9 # decay rate for online stats
+const RENDERGAMMA = 0.9
+const SIMGAMMA = 0.99
 
 
 include("util.jl")
 include("glfw.jl")
+include("ratetimer.jl")
 include("types.jl")
 include("functions.jl")
 include("modes.jl")
@@ -87,9 +89,16 @@ end
 
 
 function run(e::Engine)
+    if e.phys.model isa AbstractMuJoCoEnvironment
+        e.ui.reward = getreward(e.phys.model)
+        e.ui.eval = geteval(e.phys.model)
+    end
+
     # render first frame before opening window
     prepare!(e)
     render!(e)
+    e.ui.refreshrate = GetRefreshRate()
+    e.ui.lastrender = time()
     GLFW.ShowWindow(e.mngr.state.window)
 
     # run the simulation/mode in second thread
@@ -104,7 +113,6 @@ end
 function runrender(e::Engine)
     try
         shouldexit = false
-
         while !shouldexit
             @lock e.phys.lock begin
                 GLFW.PollEvents()
@@ -117,7 +125,7 @@ function runrender(e::Engine)
             trender = time()
 
             @lock e.ui.lock begin
-                e.ui.refreshrate = 1 / (trender - e.ui.lastrender)
+                e.ui.refreshrate = RENDERGAMMA * e.ui.refreshrate + (1 - RENDERGAMMA) * (1 / (trender - e.ui.lastrender))
                 e.ui.lastrender = trender
                 shouldexit = e.ui.shouldexit |= GLFW.WindowShouldClose(e.mngr.state.window)
             end
@@ -152,6 +160,7 @@ end
 
 function prepare!(e::Engine)
     ui, phys = e.ui, e.phys
+    _maybe_reweval!(ui, phys.model)
     mjv_updateScene(
         getsim(phys.model).m,
         getsim(phys.model).d,
@@ -166,6 +175,12 @@ function prepare!(e::Engine)
     e
 end
 
+_maybe_reweval!(ui, ::MJSim) = nothing
+function _maybe_reweval!(ui, env::AbstractMuJoCoEnvironment)
+    ui.reward = RENDERGAMMA * ui.reward + (1 - RENDERGAMMA) * getreward(env)
+    ui.eval = RENDERGAMMA * ui.eval + (1 - RENDERGAMMA) * geteval(env)
+    nothing
+end
 
 function runmode!(e::Engine)
     p = e.phys

@@ -1,22 +1,15 @@
 const STEPSPERKEY = 1
 const SHIFTSTEPSPERKEY = 50
 
-#action = Int(MJCore.mjMOUSE_MOVE_V)
-#if buttonright
-#    action = shift ? Int(MJCore.mjMOUSE_MOVE_H) : Int(MJCore.mjMOUSE_MOVE_V)
-#elseif buttonleft
-#    action = shift ? Int(MJCore.mjMOUSE_ROTATE_H) : Int(MJCore.mjMOUSE_ROTATE_V)
-#else
-#    action = Int(MJCore.mjMOUSE_ZOOM)
-#end
-
-#function move_pert_or_cam(ui::UIState, phys::PhysicsState, dx, dy, width, height, action::MJCore.mjtMouse)
 function move_pert_or_cam(
     ui::UIState,
     phys::PhysicsState,
     state::WindowState,
     event::MouseDrag,
 )
+    sim = getsim(phys.model)
+    scaled_dx, scaled_dy = event.dx / state.width, event.dy / state.height
+
     if state.right
         action = state.shift ? MJCore.mjMOUSE_MOVE_H : MJCore.mjMOUSE_MOVE_V
     elseif state.left
@@ -25,9 +18,6 @@ function move_pert_or_cam(
         action = MJCore.mjMOUSE_ZOOM
     end
 
-    # TODO width?
-    sim = getsim(phys.model)
-    scaled_dx, scaled_dy = event.dx / state.height, event.dy / state.height
     if iszero(phys.pert[].active)
         mjv_moveCamera(sim.m, action, scaled_dx, scaled_dy, ui.scn, ui.cam)
     else
@@ -75,7 +65,6 @@ function default_mousecb(e::Engine, s::WindowState, event::Doubleclick)
 
         # switch to tracking camera
         if selmode == 3 && selbody >= 0
-            @warn "TRACKING"
             e.ui.cam[].type = Int(MJCore.mjCAMERA_TRACKING)
             e.ui.cam[].trackbodyid = selbody
             e.ui.cam[].fixedcamid = -1
@@ -204,10 +193,6 @@ function handlers(e::Engine)
             forwardstep_event(e),
             backstep_event(e),
 
-
-
-
-
             onkeypress(GLFW.KEY_SEMICOLON, desc = "Cycle frame mode backwards") do _, _
                 ui.vopt[].frame = dec(ui.vopt[].frame, 0, Integer(MJCore.mjNFRAME) - 1)
             end,
@@ -222,8 +207,6 @@ function handlers(e::Engine)
                 ui.vopt[].label = inc(ui.vopt[].label, 0, Integer(MJCore.mjNLABEL) - 1)
             end,
 
-
-
             onkeypress(
                 GLFW.KEY_PAGE_UP,
                 desc = "Cycle engine mode forward",
@@ -236,7 +219,6 @@ function handlers(e::Engine)
             ) do state, event
                 switchmode!(e, dec(e.curmodeidx, 1, length(e.modes)))
             end,
-
 
             onkeypress(GLFW.KEY_SPACE, desc = "Pause") do state, event
                 if ui.paused

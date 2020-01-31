@@ -56,9 +56,7 @@ function showinfo!(rect::MJCore.mjrRect, e::Engine)
 
     if phys.model isa AbstractMuJoCoEnvironment
         name = string(Base.nameof(typeof(phys.model)))
-        reward = getreward(phys.model)
-        eval = geteval(phys.model)
-        @printf io "%s: Reward=%.3f  Eval=%.3f\n" name reward eval
+        @printf io "%s: Reward=%.3f  Eval=%.3f\n" name ui.reward ui.eval
     end
 
     if ui.paused
@@ -69,6 +67,7 @@ function showinfo!(rect::MJCore.mjrRect, e::Engine)
         print(io, "Forward Simulation")
     end
     @printf io " Time (s): %.3f\n" time(sim)
+    @printf io "Refresh Rate: %2d Hz\n" ui.refreshrate
 
     if ui.speedmode
         if ui.speedfactor < 1
@@ -92,7 +91,7 @@ function showinfo!(rect::MJCore.mjrRect, e::Engine)
 
     println(io, "Engine Mode: $(nameof(mode(e))).")
     modeinfo(io, ui, phys, mode(e))
-    println(io, "Options:")
+    println(io, "Mode Options:")
     write(io, e.modehandlerdescription)
     infostr = chomp(String(take!(io)))
 
@@ -133,15 +132,12 @@ function showhelp!(rect::MJCore.mjrRect, e::Engine)
     rect
 end
 
-
-
 function startrecord!(e::Engine)
     window = e.mngr.state.window
     SetWindowAttrib(window, GLFW.RESIZABLE, 0)
     w, h = GLFW.GetFramebufferSize(window)
     resize!(e.vidframe, 3 * w * h)
-    vmode = GLFW.GetVideoMode(GLFW.GetPrimaryMonitor())
-    e.ffmpeghandle, e.ffmpegdst = startffmpeg(w, h, vmode.refreshrate)
+    e.ffmpeghandle, e.ffmpegdst = startffmpeg(w, h, GetRefreshRate())
     @info "Saving video to $(e.ffmpegdst).mp4. Window resizing temporarily disabled"
     e
 end

@@ -31,6 +31,9 @@ Base.@kwdef mutable struct UIState
     paused::Bool = true
     shouldexit::Bool = false
 
+    reward::Float64 = 0
+    eval::Float64 = 0
+
     lastrender::Float64 = 0
     refreshrate::Float64 = 0
     realtimerate::Float64 = 0
@@ -109,7 +112,6 @@ mutable struct Engine{T,M<:Tuple}
             e.handlerdescription = String(take!(io))
 
             register!(mngr, enginehandlers)
-            on((_) -> render!(e), mngr.events.windowrefresh)
             on((o) -> default_mousecb(e, o.state, o.event), mngr.events.doubleclick)
             return e
         catch e
