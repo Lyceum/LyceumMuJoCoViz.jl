@@ -3,7 +3,7 @@ module LyceumMuJoCoViz
 using Base: RefValue, @lock, @lock_nofail
 
 import GLFW
-using GLFW: Window, Key, Action, MouseButton
+using GLFW: Window, Key, Action, MouseButton, GetKey
 using BangBang: @set!!
 using StaticArrays: SVector, MVector
 using Printf: @printf
@@ -45,8 +45,6 @@ Starts an interactive visualization of `model`, which can be either a valid subt
 "modes" that allow you to visualize passive dynamics, play back recorded trajectories, and
 run a controller interactively. The passive dynamics mode depends only on `model` and is
 always available, while the other modes are specified by the keyword arguments below.
-
-For more information, see the on-screen help menu.
 
 # Keywords
 
@@ -147,7 +145,6 @@ function render!(e::Engine)
 
     mjr_render(rect, e.ui.scn, e.ui.con)
 
-    e.ui.showhelp && showhelp!(rect, e)
     e.ui.showinfo && showinfo!(rect, e)
 
     # should happen last to include all overlays

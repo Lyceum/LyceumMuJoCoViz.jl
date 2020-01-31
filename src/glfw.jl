@@ -1,4 +1,5 @@
 const DOUBLECLICK_THRESHOLD = 0.250
+
 const PUNCTUATION = [
     '[',
     ']',
@@ -25,11 +26,15 @@ const PUNCTUATION = [
     MOD_SUPER = GLFW.MOD_SUPER
 end
 
-function SetWindowAttrib(window::GLFW.Window, attrib::Integer, value::Integer)
+modbits(ms::Tuple{Vararg{Mod}}) = mapreduce(Cint, |, ms)
+modbits(ms::Mod...) = modbits(ms)
+
+
+function SetWindowAttrib(window::Window, attrib::Integer, value::Integer)
     ccall(
         (:glfwSetWindowAttrib, GLFW.libglfw),
         Cvoid,
-        (GLFW.Window, Cint, Cint),
+        (Window, Cint, Cint),
         window,
         attrib,
         value,
@@ -55,32 +60,76 @@ function create_window(width::Integer, height::Integer, title::String)
 end
 create_window(title::String) = create_window(default_windowsize()..., title)
 
-isrelease(action::GLFW.Action) = action == GLFW.RELEASE
-ispress(action::GLFW.Action) = action == GLFW.PRESS
-isrepeat(action::GLFW.Action) = action == GLFW.REPEAT
+
+getalt(w::Window) = GetKey(w, GLFW.KEY_LEFT_ALT) || GetKey(w, GLFW.KEY_RIGHT_ALT)
+getshift(w::Window) = GetKey(w, GLFW.KEY_LEFT_SHIFT) || GetKey(w, GLFW.KEY_RIGHT_SHIFT)
+getcontrol(w::Window) = GetKey(w, GLFW.KEY_LEFT_CONTROL) || GetKey(w, GLFW.KEY_RIGHT_CONTROL)
+getsuper(w::Window) = GetKey(w, GLFW.KEY_LEFT_SUPER) || GetKey(w, GLFW.KEY_RIGHT_SUPER)
+
+isleft(b::MouseButton) = b == GLFW.MOUSE_BUTTON_LEFT
+ismiddle(b::MouseButton) = b == GLFW.MOUSE_BUTTON_MIDDLE
+isright(b::MouseButton) = b == GLFW.MOUSE_BUTTON_RIGHT
+
+isrelease(action::Action) = action == GLFW.RELEASE
+ispress(action::Action) = action == GLFW.PRESS
+isrepeat(action::Action) = action == GLFW.REPEAT
 
 isalt(mods::Cint) = (mods & GLFW.MOD_ALT) == GLFW.MOD_ALT
 isshift(mods::Cint) = (mods & GLFW.MOD_SHIFT) == GLFW.MOD_SHIFT
 iscontrol(mods::Cint) = (mods & GLFW.MOD_CONTROL) == GLFW.MOD_CONTROL
 issuper(mods::Cint) = (mods & GLFW.MOD_SUPER) == GLFW.MOD_SUPER
 
-isalt(key::GLFW.Key) = key == GLFW.KEY_LEFT_ALT || key == GLFW.KEY_RIGHT_ALT
-isshift(key::GLFW.Key) = key == GLFW.KEY_LEFT_SHIFT || key == GLFW.KEY_RIGHT_SHIFT
-iscontrol(key::GLFW.Key) = key == GLFW.KEY_LEFT_CONTROL || key == GLFW.KEY_RIGHT_CONTROL
-issuper(key::GLFW.Key) = key == GLFW.KEY_LEFT_SUPER || key == GLFW.KEY_RIGHT_SUPER
+isalt(key::Key) = key == GLFW.KEY_LEFT_ALT || key == GLFW.KEY_RIGHT_ALT
+isshift(key::Key) = key == GLFW.KEY_LEFT_SHIFT || key == GLFW.KEY_RIGHT_SHIFT
+iscontrol(key::Key) = key == GLFW.KEY_LEFT_CONTROL || key == GLFW.KEY_RIGHT_CONTROL
+issuper(key::Key) = key == GLFW.KEY_LEFT_SUPER || key == GLFW.KEY_RIGHT_SUPER
 
-getalt(w::GLFW.Window) =
-    GLFW.GetKey(w, GLFW.KEY_LEFT_ALT) || GLFW.GetKey(w, GLFW.KEY_RIGHT_ALT)
-getshift(w::GLFW.Window) =
-    GLFW.GetKey(w, GLFW.KEY_LEFT_SHIFT) || GLFW.GetKey(w, GLFW.KEY_RIGHT_SHIFT)
-getcontrol(w::GLFW.Window) =
-    GLFW.GetKey(w, GLFW.KEY_LEFT_CONTROL) || GLFW.GetKey(w, GLFW.KEY_RIGHT_CONTROL)
-getsuper(w::GLFW.Window) =
-    GLFW.GetKey(w, GLFW.KEY_LEFT_SUPER) || GLFW.GetKey(w, GLFW.KEY_RIGHT_SUPER)
 
-isleft(b::GLFW.MouseButton) = b == GLFW.MOUSE_BUTTON_LEFT
-ismiddle(b::GLFW.MouseButton) = b == GLFW.MOUSE_BUTTON_MIDDLE
-isright(b::GLFW.MouseButton) = b == GLFW.MOUSE_BUTTON_RIGHT
+function glfw_lookup_key(x::Integer)
+    for key in instances(Key)
+        Int(key) == x && return key
+    end
+    error("Key with unicode value $x not found")
+end
+glfw_lookup_key(s::AbstractString) = glfw_lookup_key(str2unicode(s))
+
+function describe(x::Mod)
+    if x === MOD_CONTROL
+        "CTRL"
+    else
+        String(Symbol(x))[5:end]
+    end
+end
+
+function describe(x::Key)
+    c = Char(Integer(x))
+    if c in PUNCTUATION
+        #return "$c "
+        return c
+    elseif x === GLFW.KEY_ESCAPE
+        return "ESC"
+    else
+        return String(Symbol(x))[5:end]
+    end
+end
+
+function describe(x::MouseButton)
+    x == GLFW.MOUSE_BUTTON_LEFT && return "LEFT_CLICK"
+    x == GLFW.MOUSE_BUTTON_MIDDLE && return "MIDDLE_CLICK"
+    x == GLFW.MOUSE_BUTTON_RIGHT && return "RIGHT_CLICK"
+    error("unknown button $x")
+end
+
+describe(desc::String, xs...) = "$(describe(xs...))   $desc"
+
+describe(::Nothing, xs...) = nothing
+
+function describe(xs::Union{Key,MouseButton,Mod}...)
+    ms = sort!([describe(x) for x in xs if x isa Mod])
+    ks = sort!([describe(x) for x in xs if x isa MouseButton])
+    bs = sort!([describe(x) for x in xs if x isa Key])
+    join(vcat(ms, ks, bs), "+")
+end
 
 
 ####
@@ -90,19 +139,19 @@ isright(b::GLFW.MouseButton) = b == GLFW.MOUSE_BUTTON_RIGHT
 abstract type Event end
 
 struct KeyPress <: Event
-    key::GLFW.Key
+    key::Key
     time::Float64
 end
 KeyPress(key) = KeyPress(key, time())
 
 struct KeyRelease <: Event
-    key::GLFW.Key
+    key::Key
     time::Float64
 end
 KeyRelease(key) = KeyRelease(key, time())
 
 struct KeyRepeat <: Event
-    key::GLFW.Key
+    key::Key
     time::Float64
 end
 KeyRepeat(key) = KeyRepeat(key, time())
@@ -151,11 +200,6 @@ struct MouseDrag <: Event
     time::Float64
 end
 MouseDrag(dx, dy, button) = MouseDrag(dx, dy, button, time())
-
-struct WindowRefresh <: Event
-    time::Float64
-end
-WindowRefresh() = WindowRefresh(time())
 
 struct GenericEvent{T} <: Event
     x::T
@@ -249,7 +293,6 @@ struct WindowEvents
     drag::Obs{MouseDrag}
 
     windowresize::Obs{WindowResize}
-    windowrefresh::Obs{WindowRefresh}
 
     generic::Obs{GenericEvent}
 
@@ -265,7 +308,6 @@ struct WindowEvents
             Obs{Scroll}(nothing),
             Obs{MouseDrag}(nothing),
             Obs{WindowResize}(nothing),
-            Obs{WindowRefresh}(nothing),
             Obs{GenericEvent}(nothing),
         )
     end
@@ -281,6 +323,7 @@ function events(we::WindowEvents)
     ) if T <: AbstractObservable)
 end
 
+
 mutable struct WindowManager
     state::WindowState
     events::WindowEvents
@@ -290,7 +333,6 @@ mutable struct WindowManager
     end
 end
 
-
 function attachcallbacks!(mngr::WindowManager, window::Window)
     let mngr = mngr
         GLFW.SetKeyCallback(window, (w, k, s, a, m) -> keycb!(mngr, k, s, a, m))
@@ -298,7 +340,6 @@ function attachcallbacks!(mngr::WindowManager, window::Window)
         GLFW.SetMouseButtonCallback(window, (w, b, a, m) -> mousebuttoncb!(mngr, b, a, m))
         GLFW.SetScrollCallback(window, (w, x, y) -> scrollcb!(mngr, x, y))
         GLFW.SetWindowSizeCallback(window, (w, x, y) -> windowsizecb!(mngr, x, y))
-        GLFW.SetWindowRefreshCallback(window, w -> windowrefreshcb!(mngr))
     end
     mngr
 end
@@ -332,8 +373,6 @@ function trigger!(mngr::WindowManager, e::Event)
         events.doubleclick[] = entry
     elseif e isa MouseDrag
         events.drag[] = entry
-    elseif e isa WindowRefresh
-        events.windowrefresh[] = entry
     elseif e isa GenericEvent
         events.generic[] = entry
     else
@@ -341,7 +380,6 @@ function trigger!(mngr::WindowManager, e::Event)
     end
     mngr
 end
-
 
 function keycb!(mngr::WindowManager, key::Key, ::Cint, action::Action, mods::Cint)
     status = ispress(action) || isrepeat(action)
@@ -400,7 +438,6 @@ function isdoubleclick(mngr::WindowManager, button, action, mods, t)
     end
 end
 
-
 function mousebuttoncb!(
     mngr::WindowManager,
     button::MouseButton,
@@ -442,12 +479,10 @@ function windowsizecb!(mngr::WindowManager, width, height)
     nothing
 end
 
-function windowrefreshcb!(mngr::WindowManager)
-    trigger!(mngr, WindowRefresh())
-    nothing
-end
 
-
+####
+#### Event handlers
+####
 
 abstract type AbstractEventHandler end
 
@@ -460,190 +495,120 @@ end
 
 struct EventHandler{E<:Event} <: AbstractEventHandler
     callback
-    description::Union{Nothing,String}
+    description::Maybe{String}
     EventHandler{E}(cb, desc) where {E<:Event} = checksig(cb) && new{E}(cb, desc)
 end
 EventHandler{E}(callback) where {E} = EventHandler{E}(callback, nothing)
-eventtype(::EventHandler{E}) where {E} = E
-
-struct ConditionalEventHandler{E<:Event} <: AbstractEventHandler
-    callback
-    predicate
-    description::Union{Nothing,String}
-    function ConditionalEventHandler{E}(cb, pred, desc) where {E<:Event}
-        checksig(cb) && checksig(pred) && new{E}(cb, pred, desc)
-    end
-end
-ConditionalEventHandler{E}(callback, pred) where {E} =
-    ConditionalEventHandler{E}(callback, pred, nothing)
-eventtype(::ConditionalEventHandler{E}) where {E} = E
 
 struct MultiEventHandler <: AbstractEventHandler
-    handlers::Vector{Union{EventHandler,ConditionalEventHandler}}
+    handlers::Vector{EventHandler}
     description::Maybe{String}
 end
 MultiEventHandler(handlers) = MultiEventHandler(handlers, nothing)
 
 
-function (h::ConditionalEventHandler)(val)
-    isnothing(val) && return false
-    s, e = val.state, val.event
-    h.predicate(s, e) && h.callback(s, e)
-    true
-end
+eventtype(::EventHandler{E}) where {E} = E
 
-function (h::EventHandler)(val)
-    isnothing(val) && return false
-    s, e = val.state, val.event
+function (h::EventHandler)(x::ObsEntry)
+    s, e = x.state, x.event
     h.callback(s, e)
-    true
+    nothing
 end
 
 
-register!(mngr::WindowManager, single::EventHandler) = _register!(mngr, single)
-register!(mngr::WindowManager, single::ConditionalEventHandler) = _register!(mngr, single)
-function _register!(mngr::WindowManager, single)
+function register!(mngr::WindowManager, h::EventHandler)
     for obs in events(mngr.events)
-        if eventtype(single) === eventtype(obs)
-            on(single, obs)
+        if eventtype(h) === eventtype(obs)
+            on(h, obs)
         end
     end
 end
 
-deregister!(mngr::WindowManager, single::EventHandler) = _deregister!(mngr, single)
-deregister!(mngr::WindowManager, single::ConditionalEventHandler) =
-    _deregister!(mngr, single)
-function _deregister!(
+register!(mngr::WindowManager, h::MultiEventHandler) = register!(mngr, h.handlers...)
+
+function register!(mngr::WindowManager, handlers::AbstractEventHandler...)
+    foreach(h -> register!(mngr, h), handlers)
+end
+
+
+function deregister!(
     mngr::WindowManager,
-    single::Union{EventHandler,ConditionalEventHandler},
+    h::EventHandler,
 )
     for obs in events(mngr.events)
-        if eventtype(single) === eventtype(obs)
-            off(obs, single)
+        if eventtype(h) === eventtype(obs)
+            off(obs, h)
         end
     end
 end
 
-register!(mngr::WindowManager, multi::MultiEventHandler) =
-    foreach(h -> register!(mngr, h), multi.handlers)
-deregister!(mngr::WindowManager, multi::MultiEventHandler) =
-    foreach(h -> deregister!(mngr, h), multi.handlers)
+deregister!(mngr::WindowManager, h::MultiEventHandler) = deregister!(mngr, h.handlers...)
 
-register!(mngr::WindowManager, handlers::AbstractVector{<:AbstractEventHandler}) =
-    foreach(h -> register!(mngr, h), handlers)
-deregister!(mngr::WindowManager, handlers::AbstractVector{<:AbstractEventHandler}) =
+function deregister!(mngr::WindowManager, handlers::AbstractEventHandler...)
     foreach(h -> deregister!(mngr, h), handlers)
-
-
-
-function describe(x::Mod)
-    if x === MOD_CONTROL
-        "CTRL"
-    else
-        String(Symbol(x))[5:end]
-    end
 end
-#describe(x::GLFW.Key) = String(Symbol(x))[5:end]
-function describe(x::GLFW.Key)
-    c = Char(Integer(x))
-    if c in PUNCTUATION
-        return "$c "
-    elseif x === GLFW.KEY_ESCAPE
-        return "ESC"
-    else
-        return String(Symbol(x))[5:end]
+
+
+onevent(cb, E::Type{<:Event}; desc::Maybe{String} = nothing) = EventHandler{E}(cb, desc)
+
+
+function onkeypress(cb, key::Key; desc = nothing, repeat = false)
+    EventHandler{KeyPress}(describe(desc, key)) do s, e
+        e.key == key && iszero(modbits(s)) && cb(s, e)
     end
 end
 
-function describe(x::GLFW.MouseButton)
-    x == GLFW.MOUSE_BUTTON_LEFT && return "LEFT_CLICK"
-    x == GLFW.MOUSE_BUTTON_MIDDLE && return "MIDDLE_CLICK"
-    x == GLFW.MOUSE_BUTTON_RIGHT && return "RIGHT_CLICK"
-    error("unknown button $x")
-end
-
-describe(desc::String, xs...) = "$(describe(xs...))   $desc"
-
-describe(::Nothing, xs...) = nothing
-
-function describe(xs::Union{GLFW.Key,GLFW.MouseButton,Mod}...)
-    ms = sort!([describe(x) for x in xs if x isa Mod])
-    ks = sort!([describe(x) for x in xs if x isa GLFW.MouseButton])
-    bs = sort!([describe(x) for x in xs if x isa GLFW.Key])
-    join(vcat(ms, ks, bs), "+")
-end
-
-modbits(ms::Tuple{Vararg{Mod}}) = mapreduce(Cint, |, ms)
-modbits(ms::Mod...) = modbits(ms)
-
-
-onevent(cb, E::Type{<:Event}; desc::Union{Nothing,String} = nothing) =
-    EventHandler{E}(cb, desc)
-onevent(cb, E::Type{<:Event}, pred; desc::Union{Nothing,String} = nothing) =
-    ConditionalEventHandler{E}(cb, pred, desc)
-
-function onkeypress(cb, key::GLFW.Key; desc = nothing, repeat = false)
-    pred(s, e) = e.key == key && iszero(modbits(s))
-    ConditionalEventHandler{KeyPress}(cb, pred, describe(desc, key))
-end
-function onkeypress(cb, key::GLFW.Key, mods::Mod...; desc = nothing, repeat = false)
+function onkeypress(cb, key::Key, mods::Mod...; desc = nothing, repeat = false)
     desc = describe(desc, key, mods...)
     mods = modbits(mods)
-    pred(s, e) = e.key == key && modbits(s) == mods
-    ConditionalEventHandler{KeyPress}(cb, pred, desc)
+    EventHandler{KeyPress}(desc) do s, e
+        e.key == key && modbits(s) == mods && cb(s, e)
+    end
 end
 
+
 function onclick(cb, button::MouseButton; desc = nothing)
-    pred(s, e) = e.button == button && iszero(modbits(s))
-    ConditionalEventHandler{ButtonPress}(cb, pred, describe(desc, button))
+    EventHandler{ButtonPress}(describe(desc, button)) do s, e
+        e.button == button && iszero(modbits(s)) && cb(s, e)
+    end
 end
+
 function onclick(cb, button::MouseButton, mods::Mod...; desc = nothing)
     desc = describe(desc, button, mods...)
     mods = modbits(mods)
-    pred(s, e) = e.button == button && modbits(s) == mods
-    ConditionalEventHandler{ButtonPress}(cb, pred, desc)
+    EventHandler{ButtonPress}(desc) do s, e
+        e.button == button && modbits(s) == mods && cb(s, e)
+    end
 end
+
 
 function ondoubleclick(cb, button::MouseButton; desc = nothing)
     desc = isnothing(desc) ? desc : "$(describe(button)) (doubleclick): $desc"
-    pred(s, e) = e.button == button && iszero(modbits(s))
-    ConditionalEventHandler{Doubleclick}(cb, pred, desc)
+    EventHandler{Doubleclick}(desc) do s, e
+        e.button == button && iszero(modbits(s)) && cb(s, e)
+    end
 end
+
 function ondoubleclick(cb, button::MouseButton, mods::Mod...; desc = nothing)
     desc = isnothing(desc) ? desc : "$(describe(button, mods...)) (doubleclick): $desc"
     mods = modbits(mods)
-    pred(s, e) = e.button == button && modbits(s) == mods
-    ConditionalEventHandler{Doubleclick}(cb, pred, desc)
+    EventHandler{Doubleclick}(desc) do s, e
+        e.button == button && modbits(s) == mods && cb(s, e)
+    end
 end
+
 
 function onscroll(cb; desc = nothing)
     desc = isnothing(desc) ? desc : "Scroll: $desc"
-    pred(s, e) = iszero(modbits(s)) && !iszero(e.dy)
-    ConditionalEventHandler{Scroll}(cb, pred, desc)
+    EventHandler{Scroll}(desc) do s, e
+        iszero(modbits(s)) && !iszero(e.dy) && cb(s, e)
+    end
 end
+
 function onscroll(cb, mods::Mod...; desc = nothing)
     desc = isnothing(desc) ? desc : "$(describe(mods...)) + Scroll: $desc"
     mods = modbits(mods)
-    pred(s, e) = modbits(s) == mods && !iszero(e.dy)
-    ConditionalEventHandler{Scroll}(cb, pred, desc)
-end
-
-function ondrag(cb, button::MouseButton; desc = nothing)
-    desc = isnothing(desc) ? desc : "$(describe(button)) + Drag: $desc"
-    pred(s, e) = e.button == button && iszero(modbits(s))
-    ConditionalEventHandler{MouseDrag}(cb, pred, desc)
-end
-function ondrag(cb, button::MouseButton, mods::Mod...; desc = nothing)
-    desc = isnothing(desc) ? desc : "$(describe(button, mods...)) + drag: $desc"
-    mods = modbits(mods)
-    pred(s, e) = e.button == button && modbits(s) == mods
-    ConditionalEventHandler{MouseDrag}(cb, pred, desc)
-end
-
-function glfw_lookup_key(x::Integer)
-    for key in instances(GLFW.Key)
-        Int(key) == x && return key
+    EventHandler{Scroll}(desc) do s, e
+        modbits(s) == mods && !iszero(e.dy) && cb(s, e)
     end
-    error("Key with unicode value $x not found")
 end
-glfw_lookup_key(s::AbstractString) = glfw_lookup_key(str2unicode(s))

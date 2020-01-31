@@ -86,25 +86,33 @@ function default_mousecb(e::Engine, s::WindowState, event::Doubleclick)
     end
 end
 
-function backstep_event(e)
+function gen_backstep_event(e::Engine)
     l1 = onkeypress(GLFW.KEY_LEFT) do state, event
-        e.ui.paused && for _ = 1:STEPSPERKEY
-            reversestep!(e.phys, mode(e))
+        if e.ui.paused
+            for _ = 1:STEPSPERKEY
+                reversestep!(e.phys, mode(e))
+            end
         end
     end
-    l2 = onevent(KeyRepeat, (s, e) -> e.key == GLFW.KEY_LEFT) do state, event
-        e.ui.paused && for _ = 1:STEPSPERKEY
-            reversestep!(e.phys, mode(e))
+    l2 = onevent(KeyRepeat) do state, event
+        if event.key == GLFW.KEY_LEFT && e.ui.paused
+            for _ = 1:STEPSPERKEY
+                reversestep!(e.phys, mode(e))
+            end
         end
     end
     l3 = onkeypress(GLFW.KEY_LEFT, MOD_SHIFT) do state, event
-        e.ui.paused && for _ = 1:SHIFTSTEPSPERKEY
-            reversestep!(e.phys, mode(e))
+        if e.ui.paused
+            for _ = 1:SHIFTSTEPSPERKEY
+                reversestep!(e.phys, mode(e))
+            end
         end
     end
-    l4 = onevent(KeyRepeat, (s, e) -> e.key == GLFW.KEY_LEFT && s.shift) do state, event
-        e.ui.paused && for _ = 1:SHIFTSTEPSPERKEY
-            reversestep!(e.phys, mode(e))
+    l4 = onevent(KeyRepeat) do state, event
+        if event.key == GLFW.KEY_LEFT && state.shift && e.ui.paused
+            for _ = 1:SHIFTSTEPSPERKEY
+                reversestep!(e.phys, mode(e))
+            end
         end
     end
     MultiEventHandler(
@@ -113,25 +121,33 @@ function backstep_event(e)
     )
 end
 
-function forwardstep_event(e)
+function gen_forwardstep_event(e::Engine)
     r1 = onkeypress(GLFW.KEY_RIGHT) do state, event
-        e.ui.paused && for _ = 1:STEPSPERKEY
-            forwardstep!(e.phys, mode(e))
+        if e.ui.paused
+            for _ = 1:STEPSPERKEY
+                forwardstep!(e.phys, mode(e))
+            end
         end
     end
-    r2 = onevent(KeyRepeat, (s, e) -> e.key == GLFW.KEY_RIGHT) do state, event
-        e.ui.paused && for _ = 1:STEPSPERKEY
-            forwardstep!(e.phys, mode(e))
+    r2 = onevent(KeyRepeat) do state, event
+        if event.key == GLFW.KEY_RIGHT && e.ui.paused
+            for _ = 1:STEPSPERKEY
+                forwardstep!(e.phys, mode(e))
+            end
         end
     end
     r3 = onkeypress(GLFW.KEY_RIGHT, MOD_SHIFT) do state, event
-        e.ui.paused && for _ = 1:SHIFTSTEPSPERKEY
-            forwardstep!(e.phys, mode(e))
+        if e.ui.paused
+            for _ = 1:SHIFTSTEPSPERKEY
+                forwardstep!(e.phys, mode(e))
+            end
         end
     end
-    r4 = onevent(KeyRepeat, (s, e) -> e.key == GLFW.KEY_RIGHT && s.shift) do state, event
-        e.ui.paused && for _ = 1:SHIFTSTEPSPERKEY
-            forwardstep!(e.phys, mode(e))
+    r4 = onevent(KeyRepeat) do state, event
+        if event.key == GLFW.KEY_RIGHT && state.shift && e.ui.paused
+            for _ = 1:SHIFTSTEPSPERKEY
+                forwardstep!(e.phys, mode(e))
+            end
         end
     end
     MultiEventHandler(
@@ -140,18 +156,15 @@ function forwardstep_event(e)
     )
 end
 
-
-
 function handlers(e::Engine)
     let e = e,
         sim = getsim(e.phys.model),
         pert = e.phys.pert,
         ui = e.ui,
         phys = e.phys
-
         return [
-            onkeypress(GLFW.KEY_F1, desc = "Toggle help") do state, event
-                ui.showhelp = !ui.showhelp
+            onkeypress(GLFW.KEY_F1, desc = "Show help message") do state, event
+                print(e.handlerdescription)
             end,
             onkeypress(GLFW.KEY_F2, desc = "Toggle simulation info") do state, event
                 ui.showinfo = !ui.showinfo
@@ -190,8 +203,8 @@ function handlers(e::Engine)
                 alignscale!(ui, sim)
             end,
 
-            forwardstep_event(e),
-            backstep_event(e),
+            gen_forwardstep_event(e),
+            gen_backstep_event(e),
 
             onkeypress(GLFW.KEY_SEMICOLON, desc = "Cycle frame mode backwards") do _, _
                 ui.vopt[].frame = dec(ui.vopt[].frame, 0, Integer(MJCore.mjNFRAME) - 1)
@@ -234,22 +247,17 @@ function handlers(e::Engine)
                 isnothing(e.ffmpeghandle) ? startrecord!(e) : finishrecord!(e)
             end,
 
-            onevent(
-                ButtonPress,
-                (s, e) -> !ismiddle(e.button) && s.control && pert[].select > 0,
-            ) do state, event
-                newperturb = state.right ? Int(MJCore.mjPERT_TRANSLATE) :
-                             Int(MJCore.mjPERT_ROTATE)
-                # perturbation onset: reset reference
-                iszero(pert[].active) && mjv_initPerturb(sim.m, sim.d, ui.scn, pert)
-                pert[].active = newperturb
+            onevent(ButtonPress) do state, event
+                if !ismiddle(event.button) && state.control && pert[].select > 0
+                    newperturb = state.right ? Int(MJCore.mjPERT_TRANSLATE) : Int(MJCore.mjPERT_ROTATE)
+                    # perturbation onset: reset reference
+                    iszero(pert[].active) && mjv_initPerturb(sim.m, sim.d, ui.scn, pert)
+                    pert[].active = newperturb
+                end
             end,
 
-            onevent(
-                ButtonRelease,
-                (s, e) -> isright(e.button) || isleft(e.button),
-            ) do state, event
-                pert[].active = 0
+            onevent(ButtonRelease) do state, event
+                isright(event.button) || isleft(event.button) && (pert[].active = 0)
             end,
 
             onscroll(desc = "Zoom camera") do state, event

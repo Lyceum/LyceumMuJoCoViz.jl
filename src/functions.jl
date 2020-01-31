@@ -24,24 +24,17 @@ end
 
 function switchmode!(e::Engine, idx::Integer)
     io = e.ui.miscbuf
+    seekstart(io)
 
     teardown!(e.ui, e.phys, mode(e))
-    deregister!(e.mngr, e.modehandlers)
-
-    newhandlers = handlers(e.ui, e.phys, mode(e, idx))
-    if isnothing(newhandlers)
-        e.modehandlerdescription = ""
-        e.modehandlers = AbstractEventHandler[]
-    else
-        seekstart(io)
-        writedescription!(io, newhandlers)
-        e.modehandlerdescription = String(take!(io))
-        register!(e.mngr, newhandlers)
-        e.modehandlers = newhandlers
-    end
+    deregister!(e.mngr, e.modehandlers...)
 
     e.curmodeidx = idx
+    e.modehandlers = handlers(e.ui, e.phys, mode(e))
     setup!(e.ui, e.phys, mode(e))
+    register!(e.mngr, e.modehandlers...)
+    writedescription!(io, e.modehandlers)
+    e.modehandlerdescription = String(take!(io))
 
     e
 end
@@ -110,48 +103,30 @@ function writedescription!(io, handlers::Vector{<:AbstractEventHandler})
     for handler in handlers
         !isnothing(handler.description) && println(io, handler.description)
     end
+    io
 end
 
-function showhelp!(rect::MJCore.mjrRect, e::Engine)
-    io = e.ui.miscbuf
-    seekstart(io)
-    write(io, e.handlerdescription)
-    helparr = split(String(take!(io)), '\n')
-    n = i = 0
-    l = length(helparr)
-    while n < 450
-        i += 1
-        s = helparr[i]
-        n += length(s)
-    end
-    i = max(1, i - 1)
-    info1 = join(view(helparr, 1:i), '\n')
-    info2 = join(view(helparr, min(l, (i + 1)):l), '\n')
-
-    mjr_overlay(MJCore.FONT_NORMAL, MJCore.GRID_TOPLEFT, rect, info1, info2, e.ui.con)
-    rect
-end
 
 function startrecord!(e::Engine)
     window = e.mngr.state.window
     SetWindowAttrib(window, GLFW.RESIZABLE, 0)
     w, h = GLFW.GetFramebufferSize(window)
-    resize!(e.vidframe, 3 * w * h)
-    e.ffmpeghandle, e.ffmpegdst = startffmpeg(w, h, GetRefreshRate())
-    @info "Saving video to $(e.ffmpegdst).mp4. Window resizing temporarily disabled"
+    resize!(e.framebuf, 3 * w * h)
+    e.ffmpeghandle, dst = startffmpeg(w, h, GetRefreshRate())
+    @info "Saving video to $dst. Window resizing temporarily disabled"
     e
 end
 
 function recordframe!(e::Engine, rect)
-    mjr_readPixels(e.vidframe, C_NULL, rect, e.ui.con)
-    write(e.ffmpeghandle, e.vidframe)
+    mjr_readPixels(e.framebuf, C_NULL, rect, e.ui.con)
+    write(e.ffmpeghandle, e.framebuf)
     e
 end
 
 function finishrecord!(e::Engine)
     close(e.ffmpeghandle)
     SetWindowAttrib(e.mngr.state.window, GLFW.RESIZABLE, 1)
-    e.ffmpeghandle = e.ffmpegdst = nothing
+    e.ffmpeghandle = nothing
     @info "Finished! Window resizing re-enabled."
     e
 end

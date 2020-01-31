@@ -15,7 +15,8 @@ nameof(m::EngineMode) = string(Base.nameof(typeof(m)))
 setup!(ui, phys, ::EngineMode) = nothing
 teardown!(ui, phys, ::EngineMode) = nothing
 prepare!(ui, phys, ::EngineMode) = nothing
-handlers(ui, phys, ::EngineMode) = nothing
+handlers(ui, phys, ::EngineMode) = AbstractEventHandler[]
+
 modeinfo(io, ui, phys, ::EngineMode) = nothing
 supportsreverse(::EngineMode) = false
 
@@ -54,9 +55,10 @@ end
 Controller(controller) = Controller(controller, 1.0)
 
 function setup!(ui, phys, x::Controller)
-    dt = @elapsed x.controller(phys.model);
+    dt = @elapsed x.controller(phys.model)
     x.realtimefactor = timestep(phys.model) / dt
 end
+
 teardown!(ui, phys, x::Controller) = zerofullctrl!(getsim(phys.model))
 
 function forwardstep!(p::PhysicsState, x::Controller)

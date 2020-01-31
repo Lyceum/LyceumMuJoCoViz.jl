@@ -21,7 +21,6 @@ Base.@kwdef mutable struct UIState
     con::RefValue{mjrContext} = Ref(mjrContext())
     figsensor::RefValue{mjvFigure} = Ref(mjvFigure())
 
-    showhelp::Bool = true
     showinfo::Bool = true
     showsensor::Bool = false
     speedmode::Bool = false
@@ -37,7 +36,6 @@ Base.@kwdef mutable struct UIState
     lastrender::Float64 = 0
     refreshrate::Float64 = 0
     realtimerate::Float64 = 0
-    msgbuf::IOBuffer = IOBuffer()
     miscbuf::IOBuffer = IOBuffer()
 
     lock::ReentrantLock = ReentrantLock()
@@ -47,7 +45,6 @@ mutable struct Engine{T,M<:Tuple}
     phys::PhysicsState{T}
     ui::UIState
     mngr::WindowManager
-
     handlerdescription::String
 
     modes::M
@@ -56,8 +53,7 @@ mutable struct Engine{T,M<:Tuple}
     curmodeidx::Int
 
     ffmpeghandle::Maybe{Base.Process}
-    ffmpegdst::Maybe{String}
-    vidframe::Vector{UInt8}
+    framebuf::Vector{UInt8}
 
     function Engine(model::Union{MJSim,AbstractMuJoCoEnvironment}, modes::EngineMode...)
         window = create_window("LyceumMuJoCoViz")
@@ -80,39 +76,31 @@ mutable struct Engine{T,M<:Tuple}
             init_figsensor!(ui.figsensor)
 
             io = IOBuffer()
-
-            curhandlers = handlers(ui, phys, modes[1])
-            if isnothing(curhandlers)
-                curhandlers = AbstractEventHandler[]
-                modehandlerdesc = ""
-            else
-                modehandlerdesc = String(take!(writedescription!(io, curhandlers)))
-            end
+            modehandlers = handlers(ui, phys, first(modes))
+            modehandlerdescription = String(take!(writedescription!(io, modehandlers)))
 
             e = new{typeof(model),typeof(modes)}(
                 phys,
                 ui,
                 mngr,
-
                 "",
 
                 modes,
-                curhandlers,
-                modehandlerdesc,
+                modehandlers,
+                modehandlerdescription,
                 1,
 
-                nothing,
                 nothing,
                 UInt8[],
             )
 
-            enginehandlers = handlers(e)
-            enginehandlers = convert(Vector{<:AbstractEventHandler}, enginehandlers)
+            enginehandlers = convert(Vector{<:AbstractEventHandler}, handlers(e))
+            register!(mngr, enginehandlers...)
             writedescription!(io, enginehandlers)
             e.handlerdescription = String(take!(io))
 
-            register!(mngr, enginehandlers)
             on((o) -> default_mousecb(e, o.state, o.event), mngr.events.doubleclick)
+
             return e
         catch e
             GLFW.DestroyWindow(window)

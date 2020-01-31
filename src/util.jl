@@ -20,9 +20,9 @@ dec(x, min, max) = x == min ? max : x - 1
 function startffmpeg(w::Integer, h::Integer, rate::Integer)
     w > 0 && h > 0 && rate > 0 || error("w, h, and rate must be > 0")
 
-    dst = tempname()
+    dst = tempname() * ".mp4"
     outrate = min(rate, 30) # max out at 30 FPS
-    arg = `-y -f rawvideo -pixel_format rgb24 -video_size $(w)x$(h) -framerate $rate -use_wallclock_as_timestamps true -i pipe:0 -c:v libx264 -preset ultrafast -tune animation -crf 27 -vf "vflip" -r $outrate $(dst).mp4`
+    arg = `-y -f rawvideo -pixel_format rgb24 -video_size $(w)x$(h) -framerate $rate -use_wallclock_as_timestamps true -i pipe:0 -c:v libx264 -preset ultrafast -tune animation -crf 27 -vf "vflip" -r $outrate $dst`
 
     withenv(FFMPEG.execenv) do
         in = Base.PipeEndpoint()
