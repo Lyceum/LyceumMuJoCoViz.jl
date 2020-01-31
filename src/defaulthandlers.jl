@@ -291,6 +291,62 @@ function handlers(e::Engine)
             onevent(MouseDrag) do state, event
                 move_pert_or_cam(ui, phys, state, event)
             end,
+
+            gen_mjflag_events(ui)...
         ]
     end
+end
+
+function gen_mjflag_events(ui::UIState)
+    handlers = AbstractEventHandler[]
+
+    for i=1:Int(MJCore.mjNVISFLAG)
+        key = glfw_lookup_key(MJCore.mjVISSTRING[3, i])
+        name = MJCore.mjVISSTRING[1, i]
+        h = onkeypress(key, desc = "Toggle $name Viz Flag") do _, _
+            ui.vopt[].flags = _toggleflag(ui.vopt[].flags, i)
+        end
+        push!(handlers, h)
+    end
+
+    for i=1:Int(MJCore.mjNRNDFLAG)
+        key = glfw_lookup_key(MJCore.mjRNDSTRING[3, i])
+        name = MJCore.mjRNDSTRING[1, i]
+        h = onkeypress(key, desc = "Toggle $name Render Flag") do _, _
+            ui.scn[].flags = _toggleflag(ui.scn[].flags, i)
+        end
+        push!(handlers, h)
+    end
+
+    n = Int(MJCore.mjNGROUP)
+    h = onevent(KeyPress, desc = "Toggle Group Groups 1-$n") do s, e
+        iszero(modbits(s)) || return
+        for i=1:n
+            if Int(e.key) == i + Int('0')
+                ui.vopt[].geomgroup = _toggleflag(ui.vopt[].geomgroup, i)
+                return
+            end
+        end
+    end
+    push!(handlers, h)
+
+    n = Int(MJCore.mjNGROUP)
+    h = onevent(KeyPress, desc = "Toggle Site Groups 1-$n") do s, e
+        isshift(modbits(s)) || return
+        for i=1:n
+            if Int(e.key) == i + Int('0')
+                ui.vopt[].sitegroup = _toggleflag(ui.vopt[].sitegroup, i)
+                return
+            end
+        end
+    end
+    push!(handlers, h)
+
+    handlers
+end
+
+@inline function _toggleflag(A::SVector{N,MJCore.mjtByte}, i::Integer) where {N}
+    A = MVector(A)
+    A[i] = ifelse(A[i] > 0, 0, 1)
+    SVector(A)
 end

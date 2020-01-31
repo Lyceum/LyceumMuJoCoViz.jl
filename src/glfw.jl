@@ -577,9 +577,9 @@ modbits(ms::Tuple{Vararg{Mod}}) = mapreduce(Cint, |, ms)
 modbits(ms::Mod...) = modbits(ms)
 
 
-onevent(cb, E::Type{<:Event}, desc::Union{Nothing,String} = nothing) =
+onevent(cb, E::Type{<:Event}; desc::Union{Nothing,String} = nothing) =
     EventHandler{E}(cb, desc)
-onevent(cb, E::Type{<:Event}, pred, desc::Union{Nothing,String} = nothing) =
+onevent(cb, E::Type{<:Event}, pred; desc::Union{Nothing,String} = nothing) =
     ConditionalEventHandler{E}(cb, pred, desc)
 
 function onkeypress(cb, key::GLFW.Key; desc = nothing, repeat = false)
@@ -639,3 +639,11 @@ function ondrag(cb, button::MouseButton, mods::Mod...; desc = nothing)
     pred(s, e) = e.button == button && modbits(s) == mods
     ConditionalEventHandler{MouseDrag}(cb, pred, desc)
 end
+
+function glfw_lookup_key(x::Integer)
+    for key in instances(GLFW.Key)
+        Int(key) == x && return key
+    end
+    error("Key with unicode value $x not found")
+end
+glfw_lookup_key(s::AbstractString) = glfw_lookup_key(str2unicode(s))

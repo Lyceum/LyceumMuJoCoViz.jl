@@ -52,3 +52,8 @@ seconds.
     while time() - t0 < dt end
     nothing
 end
+
+@inline function str2unicode(s::AbstractString)
+    length(s) == 1 || error("s must be a single length string")
+    Int(first(s))
+end
