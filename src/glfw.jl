@@ -500,13 +500,6 @@ struct EventHandler{E<:Event} <: AbstractEventHandler
 end
 EventHandler{E}(callback) where {E} = EventHandler{E}(callback, nothing)
 
-struct MultiEventHandler <: AbstractEventHandler
-    handlers::Vector{EventHandler}
-    description::Maybe{String}
-end
-MultiEventHandler(handlers) = MultiEventHandler(handlers, nothing)
-
-
 eventtype(::EventHandler{E}) where {E} = E
 
 function (h::EventHandler)(x::ObsEntry)
@@ -514,7 +507,6 @@ function (h::EventHandler)(x::ObsEntry)
     h.callback(s, e)
     nothing
 end
-
 
 function register!(mngr::WindowManager, h::EventHandler)
     for obs in events(mngr.events)
@@ -524,17 +516,7 @@ function register!(mngr::WindowManager, h::EventHandler)
     end
 end
 
-register!(mngr::WindowManager, h::MultiEventHandler) = register!(mngr, h.handlers...)
-
-function register!(mngr::WindowManager, handlers::AbstractEventHandler...)
-    foreach(h -> register!(mngr, h), handlers)
-end
-
-
-function deregister!(
-    mngr::WindowManager,
-    h::EventHandler,
-)
+function deregister!(mngr::WindowManager, h::EventHandler)
     for obs in events(mngr.events)
         if eventtype(h) === eventtype(obs)
             off(obs, h)
@@ -542,7 +524,21 @@ function deregister!(
     end
 end
 
+
+struct MultiEventHandler <: AbstractEventHandler
+    handlers::Vector{EventHandler}
+    description::Maybe{String}
+end
+MultiEventHandler(handlers) = MultiEventHandler(handlers, nothing)
+
+register!(mngr::WindowManager, h::MultiEventHandler) = register!(mngr, h.handlers...)
+
 deregister!(mngr::WindowManager, h::MultiEventHandler) = deregister!(mngr, h.handlers...)
+
+
+function register!(mngr::WindowManager, handlers::AbstractEventHandler...)
+    foreach(h -> register!(mngr, h), handlers)
+end
 
 function deregister!(mngr::WindowManager, handlers::AbstractEventHandler...)
     foreach(h -> deregister!(mngr, h), handlers)
@@ -552,13 +548,13 @@ end
 onevent(cb, E::Type{<:Event}; desc::Maybe{String} = nothing) = EventHandler{E}(cb, desc)
 
 
-function onkeypress(cb, key::Key; desc = nothing, repeat = false)
+function onkeypress(cb, key::Key; desc = nothing)
     EventHandler{KeyPress}(describe(desc, key)) do s, e
         e.key == key && iszero(modbits(s)) && cb(s, e)
     end
 end
 
-function onkeypress(cb, key::Key, mods::Mod...; desc = nothing, repeat = false)
+function onkeypress(cb, key::Key, mods::Mod...; desc = nothing)
     desc = describe(desc, key, mods...)
     mods = modbits(mods)
     EventHandler{KeyPress}(desc) do s, e

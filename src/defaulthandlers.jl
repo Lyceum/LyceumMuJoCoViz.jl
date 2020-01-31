@@ -206,18 +206,18 @@ function handlers(e::Engine)
             gen_forwardstep_event(e),
             gen_backstep_event(e),
 
-            onkeypress(GLFW.KEY_SEMICOLON, desc = "Cycle frame mode backwards") do _, _
-                ui.vopt[].frame = dec(ui.vopt[].frame, 0, Integer(MJCore.mjNFRAME) - 1)
+            onkeypress(GLFW.KEY_LEFT_BRACKET, desc = "Cycle frame mode backwards") do _, _
+                ui.vopt[].frame = dec(ui.vopt[].frame, 0, Int(MJCore.mjNFRAME) - 1)
             end,
-            onkeypress(GLFW.KEY_APOSTROPHE, desc = "Cycle frame mode forward") do _, _
-                ui.vopt[].frame = inc(ui.vopt[].frame, 0, Integer(MJCore.mjNFRAME) - 1)
+            onkeypress(GLFW.KEY_RIGHT_BRACKET, desc = "Cycle frame mode forward") do _, _
+                ui.vopt[].frame = inc(ui.vopt[].frame, 0, Int(MJCore.mjNFRAME) - 1)
             end,
 
-            onkeypress(GLFW.KEY_PERIOD, desc = "Cycle label mode backwards") do _, _
-                ui.vopt[].label = dec(ui.vopt[].label, 0, Integer(MJCore.mjNLABEL) - 1)
+            onkeypress(GLFW.KEY_MINUS, desc = "Cycle label mode backwards") do _, _
+                ui.vopt[].label = dec(ui.vopt[].label, 0, Int(MJCore.mjNLABEL) - 1)
             end,
-            onkeypress(GLFW.KEY_SLASH, desc = "Cycle label mode forward") do _, _
-                ui.vopt[].label = inc(ui.vopt[].label, 0, Integer(MJCore.mjNLABEL) - 1)
+            onkeypress(GLFW.KEY_EQUAL, desc = "Cycle label mode forward") do _, _
+                ui.vopt[].label = inc(ui.vopt[].label, 0, Int(MJCore.mjNLABEL) - 1)
             end,
 
             onkeypress(
