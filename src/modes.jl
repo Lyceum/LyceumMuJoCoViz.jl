@@ -5,6 +5,16 @@
 # required
 forwardstep!(p, ::EngineMode) = error("must implement")
 
+# optional
+pausestep!(phys, ::EngineMode) = nothing
+reset!(phys, ::EngineMode) = reset!(phys.model)
+nameof(m::EngineMode) = string(Base.nameof(typeof(m)))
+setup!(ui, phys, ::EngineMode) = nothing
+teardown!(ui, phys, ::EngineMode) = nothing
+prepare!(ui, phys, ::EngineMode) = nothing
+handlers(ui, phys, ::EngineMode) = AbstractEventHandler[]
+
+modeinfo(io, ui, phys, ::EngineMode) = nothing
 supportsreverse(::EngineMode) = false
 function reversestep!(p, m::EngineMode)
     supportsreverse(m) && error("supportsreverse was true but reversestep! undefined")
@@ -40,16 +50,12 @@ mutable struct Controller{F} <: EngineMode
 end
 Controller(controller) = Controller(controller, 1.0)
 
-function setup!(ui::UIState, p::PhysicsState, x::Controller)
-    dt = @elapsed x.controller(p.model)
-    x.realtimefactor = timestep(p.model) / dt
-    return ui
+function setup!(ui, phys, x::Controller)
+    dt = @elapsed x.controller(phys.model)
+    x.realtimefactor = timestep(phys.model) / dt
 end
 
-function teardown!(ui::UIState, p::PhysicsState, x::Controller)
-    zerofullctrl!(getsim(p.model))
-    return ui
-end
+teardown!(ui, phys, x::Controller) = zerofullctrl!(getsim(phys.model))
 
 function forwardstep!(p::PhysicsState, x::Controller)
     dt = @elapsed x.controller(p.model)

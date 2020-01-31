@@ -36,8 +36,7 @@ Base.@kwdef mutable struct UIState
     lastrender::Float64 = 0
     refreshrate::Float64 = 0
     realtimerate::Float64 = 0
-    io1::IOBuffer = IOBuffer()
-    io2::IOBuffer = IOBuffer()
+    miscbuf::IOBuffer = IOBuffer()
 
     lock::ReentrantLock = ReentrantLock()
 end
@@ -46,7 +45,7 @@ mutable struct Engine{T,M}
     phys::PhysicsState{T}
     ui::UIState
     mngr::WindowManager
-    handlers::Vector{EventHandler}
+    handlerdescription::String
 
     modes::M
     modehandlers::Vector{EventHandler}
@@ -75,22 +74,31 @@ mutable struct Engine{T,M}
             alignscale!(ui, sim)
             init_figsensor!(ui.figsensor)
 
+            io = IOBuffer()
+            modehandlers = handlers(ui, phys, first(modes))
+            modehandlerdescription = String(take!(writedescription!(io, modehandlers)))
+
             e = new{typeof(model),typeof(modes)}(
                 phys,
                 ui,
                 mngr,
-                EventHandler[],
+                "",
 
                 modes,
-                handlers(ui, phys, first(modes)),
+                modehandlers,
+                modehandlerdescription,
                 1,
 
                 nothing,
                 UInt8[],
             )
 
-            e.handlers = handlers(e)
-            register!(mngr, e.handlers...)
+            enginehandlers = convert(Vector{<:AbstractEventHandler}, handlers(e))
+            register!(mngr, enginehandlers...)
+            writedescription!(io, enginehandlers)
+            e.handlerdescription = String(take!(io))
+
+            on((o) -> default_mousecb(e, o.state, o.event), mngr.events.doubleclick)
 
             return e
         catch e

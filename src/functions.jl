@@ -23,6 +23,9 @@ end
 @inline mode(e::Engine, idx::Integer = e.curmodeidx) = e.modes[idx]
 
 function switchmode!(e::Engine, idx::Integer)
+    io = e.ui.miscbuf
+    seekstart(io)
+
     teardown!(e.ui, e.phys, mode(e))
     deregister!(e.mngr, e.modehandlers...)
 
@@ -30,6 +33,8 @@ function switchmode!(e::Engine, idx::Integer)
     e.modehandlers = handlers(e.ui, e.phys, mode(e))
     setup!(e.ui, e.phys, mode(e))
     register!(e.mngr, e.modehandlers...)
+    writedescription!(io, e.modehandlers)
+    e.modehandlerdescription = String(take!(io))
 
     return e
 end
@@ -159,7 +164,11 @@ function overlay_info(rect::MJCore.mjrRect, e::Engine)
         ui.con,
     )
 
-    return
+function writedescription!(io, handlers::Vector{<:AbstractEventHandler})
+    for handler in handlers
+        !isnothing(handler.description) && println(io, handler.description)
+    end
+    io
 end
 
 
@@ -168,23 +177,21 @@ function startrecord!(e::Engine)
     SetWindowAttrib(window, GLFW.RESIZABLE, 0)
     w, h = GLFW.GetFramebufferSize(window)
     resize!(e.framebuf, 3 * w * h)
-    e.ffmpeghandle, dst = startffmpeg(w, h)
+    e.ffmpeghandle, dst = startffmpeg(w, h, GetRefreshRate())
     @info "Saving video to $dst. Window resizing temporarily disabled"
-    return e
+    e
 end
 
-function recordframe(e::Engine)
-    w, h = GLFW.GetFramebufferSize(e.mngr.state.window)
-    rect = mjrRect(Cint(0), Cint(0), Cint(w), Cint(h))
+function recordframe!(e::Engine, rect)
     mjr_readPixels(e.framebuf, C_NULL, rect, e.ui.con)
     write(e.ffmpeghandle, e.framebuf)
-    return nothing
+    e
 end
 
 function stoprecord!(e::Engine)
     close(e.ffmpeghandle)
     SetWindowAttrib(e.mngr.state.window, GLFW.RESIZABLE, 1)
     e.ffmpeghandle = nothing
-    @info "Finished recording! Window resizing re-enabled."
-    return e
+    @info "Finished! Window resizing re-enabled."
+    e
 end

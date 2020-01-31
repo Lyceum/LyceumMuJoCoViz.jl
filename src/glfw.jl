@@ -1,3 +1,24 @@
+const DOUBLECLICK_THRESHOLD = 0.250
+
+const PUNCTUATION = [
+    '[',
+    ']',
+    '{',
+    '}',
+    ';',
+    ':',
+    '\'',
+    '"',
+    ',',
+    '<',
+    '.',
+    '>',
+    '/',
+    '?',
+    '+',
+    '=',
+]
+
 @enum Mod::UInt16 begin
     MOD_ALT = GLFW.MOD_ALT
     MOD_SHIFT = GLFW.MOD_SHIFT
@@ -5,32 +26,8 @@
     MOD_SUPER = GLFW.MOD_SUPER
 end
 
-const DOUBLECLICK_THRESHOLD = 0.250
-
-const PUNCTUATION = let
-    chars = [
-        GLFW.KEY_APOSTROPHE,
-        GLFW.KEY_COMMA,
-        GLFW.KEY_MINUS,
-        GLFW.KEY_PERIOD,
-        GLFW.KEY_SLASH,
-        GLFW.KEY_SEMICOLON,
-        GLFW.KEY_EQUAL,
-        GLFW.KEY_LEFT_BRACKET,
-        GLFW.KEY_BACKSLASH,
-        GLFW.KEY_RIGHT_BRACKET,
-        GLFW.KEY_GRAVE_ACCENT,
-    ]
-    Set{Int}(map(Int, chars))
-end
-
-const PRINTABLE_KEYS = let
-    keys = [
-        [i for i in Int(GLFW.KEY_A):Int(GLFW.KEY_Z)]...,
-        [i + Int('0') for i=0:9]...,
-    ]
-    Set{Int}(keys)
-end
+modbits(ms::Tuple{Vararg{Mod}}) = mapreduce(Cint, |, ms)
+modbits(ms::Mod...) = modbits(ms)
 
 
 function SetWindowAttrib(window::Window, attrib::Integer, value::Integer)
@@ -65,27 +62,26 @@ end
 create_window(title::String) = create_window(default_windowsize()..., title)
 
 
+getalt(w::Window) = GetKey(w, GLFW.KEY_LEFT_ALT) || GetKey(w, GLFW.KEY_RIGHT_ALT)
+getshift(w::Window) = GetKey(w, GLFW.KEY_LEFT_SHIFT) || GetKey(w, GLFW.KEY_RIGHT_SHIFT)
+getcontrol(w::Window) = GetKey(w, GLFW.KEY_LEFT_CONTROL) || GetKey(w, GLFW.KEY_RIGHT_CONTROL)
+getsuper(w::Window) = GetKey(w, GLFW.KEY_LEFT_SUPER) || GetKey(w, GLFW.KEY_RIGHT_SUPER)
+
+isleft(b::MouseButton) = b == GLFW.MOUSE_BUTTON_LEFT
+ismiddle(b::MouseButton) = b == GLFW.MOUSE_BUTTON_MIDDLE
+isright(b::MouseButton) = b == GLFW.MOUSE_BUTTON_RIGHT
+
+isrelease(action::Action) = action == GLFW.RELEASE
+ispress(action::Action) = action == GLFW.PRESS
+isrepeat(action::Action) = action == GLFW.REPEAT
+
 @inline modbits(ms::Tuple{Vararg{Mod}}) = mapreduce(Cint, |, ms)
 @inline modbits(ms::Mod...) = modbits(ms)
 
-@inline isleft(b::MouseButton) = b === GLFW.MOUSE_BUTTON_LEFT
-@inline ismiddle(b::MouseButton) = b === GLFW.MOUSE_BUTTON_MIDDLE
-@inline isright(b::MouseButton) = b === GLFW.MOUSE_BUTTON_RIGHT
-
-@inline isrelease(action::Action) = action === GLFW.RELEASE
-@inline ispress(action::Action) = action === GLFW.PRESS
-@inline isrepeat(action::Action) = action === GLFW.REPEAT
-@inline ispress_or_repeat(action::Action) = ispress(action) || isrepeat(action)
-
-@inline isalt(mods::Cint) = (mods & GLFW.MOD_ALT) == GLFW.MOD_ALT
-@inline isshift(mods::Cint) = (mods & GLFW.MOD_SHIFT) == GLFW.MOD_SHIFT
-@inline iscontrol(mods::Cint) = (mods & GLFW.MOD_CONTROL) == GLFW.MOD_CONTROL
-@inline issuper(mods::Cint) = (mods & GLFW.MOD_SUPER) == GLFW.MOD_SUPER
-
-@inline isalt(key::Key) = key === GLFW.KEY_LEFT_ALT || key === GLFW.KEY_RIGHT_ALT
-@inline isshift(key::Key) = key === GLFW.KEY_LEFT_SHIFT || key === GLFW.KEY_RIGHT_SHIFT
-@inline iscontrol(key::Key) = key === GLFW.KEY_LEFT_CONTROL || key === GLFW.KEY_RIGHT_CONTROL
-@inline issuper(key::Key) = key === GLFW.KEY_LEFT_SUPER || key === GLFW.KEY_RIGHT_SUPER
+isalt(key::Key) = key == GLFW.KEY_LEFT_ALT || key == GLFW.KEY_RIGHT_ALT
+isshift(key::Key) = key == GLFW.KEY_LEFT_SHIFT || key == GLFW.KEY_RIGHT_SHIFT
+iscontrol(key::Key) = key == GLFW.KEY_LEFT_CONTROL || key == GLFW.KEY_RIGHT_CONTROL
+issuper(key::Key) = key == GLFW.KEY_LEFT_SUPER || key == GLFW.KEY_RIGHT_SUPER
 
 
 function glfw_lookup_key(x::Integer)
@@ -94,20 +90,68 @@ function glfw_lookup_key(x::Integer)
     end
     error("Key with unicode value $x not found")
 end
-@inline glfw_lookup_key(s::AbstractString) = glfw_lookup_key(str2unicode(s))
+glfw_lookup_key(s::AbstractString) = glfw_lookup_key(str2unicode(s))
 
 function describe(x::Mod)
     if x === MOD_CONTROL
-        return "CTRL"
+        "CTRL"
     else
-        s = String(Symbol(x))
-        return last(split(s, '_'))
+        String(Symbol(x))[5:end]
     end
 end
 
 function describe(x::Key)
-    i = Int(x)
-    c = Char(i)
+    c = Char(Integer(x))
+    if c in PUNCTUATION
+        #return "$c "
+        return c
+    elseif x === GLFW.KEY_ESCAPE
+        return "ESC"
+    else
+        return String(Symbol(x))[5:end]
+    end
+end
+
+function describe(x::MouseButton)
+    x == GLFW.MOUSE_BUTTON_LEFT && return "LEFT_CLICK"
+    x == GLFW.MOUSE_BUTTON_MIDDLE && return "MIDDLE_CLICK"
+    x == GLFW.MOUSE_BUTTON_RIGHT && return "RIGHT_CLICK"
+    error("unknown button $x")
+end
+
+describe(desc::String, xs...) = "$(describe(xs...))   $desc"
+
+describe(::Nothing, xs...) = nothing
+
+function describe(xs::Union{Key,MouseButton,Mod}...)
+    ms = sort!([describe(x) for x in xs if x isa Mod])
+    ks = sort!([describe(x) for x in xs if x isa MouseButton])
+    bs = sort!([describe(x) for x in xs if x isa Key])
+    join(vcat(ms, ks, bs), "+")
+end
+
+@inline isalt(key::Key) = key === GLFW.KEY_LEFT_ALT || key === GLFW.KEY_RIGHT_ALT
+@inline isshift(key::Key) = key === GLFW.KEY_LEFT_SHIFT || key === GLFW.KEY_RIGHT_SHIFT
+@inline iscontrol(key::Key) = key === GLFW.KEY_LEFT_CONTROL || key === GLFW.KEY_RIGHT_CONTROL
+@inline issuper(key::Key) = key === GLFW.KEY_LEFT_SUPER || key === GLFW.KEY_RIGHT_SUPER
+
+
+struct KeyPress <: Event
+    key::Key
+    time::Float64
+end
+@inline glfw_lookup_key(s::AbstractString) = glfw_lookup_key(str2unicode(s))
+
+struct KeyRelease <: Event
+    key::Key
+    time::Float64
+end
+
+struct KeyRepeat <: Event
+    key::Key
+    time::Float64
+end
+KeyRepeat(key) = KeyRepeat(key, time())
 
     if i in PUNCTUATION
         return "\"$(c)\""
@@ -162,15 +206,8 @@ struct MouseMoveEvent <: Event
     time::Float64
 end
 
-struct ScrollEvent <: Event
-    dx::Float64
-    dy::Float64
-    time::Float64
-end
-
-struct WindowResizeEvent <: Event
-    dx::Float64
-    dy::Float64
+struct GenericEvent{T} <: Event
+    x::T
     time::Float64
 end
 
@@ -255,19 +292,34 @@ end
 
 const Obs{E} = Observable{Maybe{ObsEntry{E}}}
 struct WindowEvents
-    key::Obs{KeyEvent}
-    button::Obs{ButtonEvent}
-    mouse::Obs{MouseMoveEvent}
-    scroll::Obs{ScrollEvent}
-    windowresize::Obs{WindowResizeEvent}
+    keypress::Obs{KeyPress}
+    keyrelease::Obs{KeyRelease}
+    keyrepeat::Obs{KeyRepeat}
+    doubleclick::Obs{Doubleclick}
+
+    buttonpress::Obs{ButtonPress}
+    buttonrelease::Obs{ButtonRelease}
+    cursor::Obs{CursorPos}
+    scroll::Obs{Scroll}
+    drag::Obs{MouseDrag}
+
+    windowresize::Obs{WindowResize}
+
+    generic::Obs{GenericEvent}
 
     function WindowEvents()
         new(
-            Obs{KeyEvent}(nothing),
-            Obs{ButtonEvent}(nothing),
-            Obs{MouseMoveEvent}(nothing),
-            Obs{ScrollEvent}(nothing),
-            Obs{WindowResizeEvent}(nothing),
+            Obs{KeyPress}(nothing),
+            Obs{KeyRelease}(nothing),
+            Obs{KeyRepeat}(nothing),
+            Obs{Doubleclick}(nothing),
+            Obs{ButtonPress}(nothing),
+            Obs{ButtonRelease}(nothing),
+            Obs{CursorPos}(nothing),
+            Obs{Scroll}(nothing),
+            Obs{MouseDrag}(nothing),
+            Obs{WindowResize}(nothing),
+            Obs{GenericEvent}(nothing),
         )
     end
 end
@@ -275,6 +327,7 @@ end
 eventtype(x::Union{Obs{E},ObsEntry{E}}) where {E} = E
 
 events(x::WindowEvents) = ntuple(i -> getfield(x, i), Val(fieldcount(WindowEvents)))
+
 
 
 mutable struct WindowManager
@@ -312,12 +365,15 @@ function trigger!(mngr::WindowManager, e::Event)
         events.scroll[] = entry
     elseif e isa WindowResizeEvent
         events.windowresize[] = entry
+    elseif e isa Doubleclick
+        events.doubleclick[] = entry
+    elseif e isa MouseDrag
+        events.drag[] = entry
+    elseif e isa GenericEvent
+        events.generic[] = entry
     else
         error("Unknown event $e")
     end
-
-    return mngr
-end
 
 function keycb!(mngr::WindowManager, key::Key, ::Cint, action::Action, mods::Cint)
     s = mngr.state
@@ -358,6 +414,16 @@ function cursorposcb!(mngr::WindowManager, x, y)
     trigger!(mngr, MouseMoveEvent(dx, dy, isdrag, t))
 
     return
+end
+
+function isdoubleclick(mngr::WindowManager, button, action, mods, t)
+    if !isnothing(mngr.events.buttonpress[])
+        lb = mngr.events.buttonpress[].event
+        return ispress(action) &&
+               button == lb.button && (t - lb.time) < DOUBLECLICK_THRESHOLD
+    else
+        return false
+    end
 end
 
 function mousebuttoncb!(
@@ -401,43 +467,52 @@ function scrollcb!(mngr::WindowManager, dx, dy)
 end
 
 function windowsizecb!(mngr::WindowManager, width, height)
-    s = mngr.state
-    dx = width - s.width
-    dy = height - s.height
-    s.width = width
-    s.height = height
-    trigger!(mngr, WindowResizeEvent(dx, dy, time()))
-    return
+    mngr.state.width = width
+    mngr.state.height = height
+    trigger!(mngr, WindowResize())
+    nothing
 end
+
 
 ####
 #### Event handlers
 ####
 
-struct EventHandler{E<:Event}
-    callback
-    what::Maybe{String}
-    when::Maybe{String}
-    function EventHandler{E}(cb, what, when) where {E<:Event}
-        if !hasmethod(cb, (WindowState, Event))
-            error("EventHandler callbacks must have signature (WindowState, Event), got: $(methods(f))")
-        end
-        if what === nothing && when !== nothing
-            error("Must provide `what` if specifying `when`")
-        end
-        new{E}(cb, what, when)
+abstract type AbstractEventHandler end
+
+function checksig(f)
+    if !hasmethod(f, (WindowState, Event))
+        error("AbstractEventHandler callbacks and conditions must have signature (WindowState, Event), got: $(methods(f))")
     end
+    true
 end
-function EventHandler{E}(cb; what = nothing, when = nothing) where {E<:Event}
-    EventHandler{E}(cb, what, when)
+
+struct EventHandler{E<:Event} <: AbstractEventHandler
+    callback
+    description::Maybe{String}
+    EventHandler{E}(cb, desc) where {E<:Event} = checksig(cb) && new{E}(cb, desc)
 end
+EventHandler{E}(callback) where {E} = EventHandler{E}(callback, nothing)
+
+struct MultiEventHandler <: AbstractEventHandler
+    handlers::Vector{EventHandler}
+    description::Maybe{String}
+end
+MultiEventHandler(handlers) = MultiEventHandler(handlers, nothing)
+
 
 eventtype(::EventHandler{E}) where {E} = E
 
+function (h::EventHandler)(x::ObsEntry)
+    s, e = x.state, x.event
+    h.callback(s, e)
+    nothing
+end
+
 (h::EventHandler)(x::ObsEntry) = h.callback(x.state, x.event)
 
-function register!(mngr::WindowManager, hs::EventHandler...)
-    for obs in events(mngr.events), h in hs
+function register!(mngr::WindowManager, h::EventHandler)
+    for obs in events(mngr.events)
         if eventtype(h) === eventtype(obs)
             on(h, obs)
         end
@@ -445,8 +520,18 @@ function register!(mngr::WindowManager, hs::EventHandler...)
     return mngr
 end
 
-function deregister!(mngr::WindowManager, hs::EventHandler...)
-    for obs in events(mngr.events), h in hs
+register!(mngr::WindowManager, h::MultiEventHandler) = register!(mngr, h.handlers...)
+
+function register!(mngr::WindowManager, handlers::AbstractEventHandler...)
+    foreach(h -> register!(mngr, h), handlers)
+end
+
+
+function deregister!(
+    mngr::WindowManager,
+    h::EventHandler,
+)
+    for obs in events(mngr.events)
         if eventtype(h) === eventtype(obs)
             off(obs, h)
         end
@@ -454,105 +539,73 @@ function deregister!(mngr::WindowManager, hs::EventHandler...)
     return mngr
 end
 
+deregister!(mngr::WindowManager, h::MultiEventHandler) = deregister!(mngr, h.handlers...)
 
-function onevent(cb, E::Type{<:Event}; what = nothing, when = nothing)
-    return EventHandler{E}(cb, what, when)
+function deregister!(mngr::WindowManager, handlers::AbstractEventHandler...)
+    foreach(h -> deregister!(mngr, h), handlers)
 end
 
 
-function onkey(cb, key::Key; what = nothing)
-    return let cb = cb
-        EventHandler{KeyEvent}(what, describe(key)) do s, e
-            e.key === key && iszero(modbits(s)) && cb(s, e)
-        end
+onevent(cb, E::Type{<:Event}; desc::Maybe{String} = nothing) = EventHandler{E}(cb, desc)
+
+
+function onkeypress(cb, key::Key; desc = nothing, repeat = false)
+    EventHandler{KeyPress}(describe(desc, key)) do s, e
+        e.key == key && iszero(modbits(s)) && cb(s, e)
     end
 end
 
-function onkey(cb, key::Key, mods::Mod...; what = nothing)
-    when = describe(key, mods...)
-    return let cb = cb, mods = modbits(mods)
-        EventHandler{KeyEvent}(what, when) do s, e
-            e.key === key && modbits(s) === mods && cb(s, e)
-        end
-    end
-end
-
-modbits(ms::Tuple{Vararg{Mod}}) = mapreduce(Cint, |, ms)
-modbits(ms::Mod...) = modbits(ms)
-
-
-onevent(cb, E::Type{<:Event}; desc::Union{Nothing,String} = nothing) =
-    EventHandler{E}(cb, desc)
-onevent(cb, E::Type{<:Event}, pred; desc::Union{Nothing,String} = nothing) =
-    ConditionalEventHandler{E}(cb, pred, desc)
-
-function onkeypress(cb, key::GLFW.Key; desc = nothing, repeat = false)
-    pred(s, e) = e.key == key && iszero(modbits(s))
-    ConditionalEventHandler{KeyPress}(cb, pred, describe(desc, key))
-end
-function onkeypress(cb, key::GLFW.Key, mods::Mod...; desc = nothing, repeat = false)
+function onkeypress(cb, key::Key, mods::Mod...; desc = nothing, repeat = false)
     desc = describe(desc, key, mods...)
     mods = modbits(mods)
-    pred(s, e) = e.key == key && modbits(s) == mods
-    ConditionalEventHandler{KeyPress}(cb, pred, desc)
-end
-
-function onscroll(cb, mods::Mod...; what = nothing)
-    when = "$(describe(mods...)) + Scroll"
-    return let cb = cb, mods = modbits(mods)
-        EventHandler{ScrollEvent}(what, when) do s, e
-            modbits(s) === mods && cb(s, e)
-        end
+    EventHandler{KeyPress}(desc) do s, e
+        e.key == key && modbits(s) == mods && cb(s, e)
     end
 end
 
 
-#function onclick(cb, button::MouseButton; desc = nothing)
-#    EventHandler{ButtonPress}(describe(desc, button)) do s, e
-#        e.button == button && iszero(modbits(s)) && cb(s, e)
-#    end
-#end
-#
-#function onclick(cb, button::MouseButton, mods::Mod...; desc = nothing)
-#    desc = describe(desc, button, mods...)
-#    mods = modbits(mods)
-#    EventHandler{ButtonPress}(desc) do s, e
-#        e.button == button && modbits(s) == mods && cb(s, e)
-#    end
-#end
-
-
-#function ondoubleclick(cb, button::MouseButton; desc = nothing)
-#    desc = isnothing(desc) ? desc : "$(describe(button)) (doubleclick): $desc"
-#    EventHandler{Doubleclick}(desc) do s, e
-#        e.button == button && iszero(modbits(s)) && cb(s, e)
-#    end
-#end
-#
-#function ondoubleclick(cb, button::MouseButton, mods::Mod...; desc = nothing)
-#    desc = isnothing(desc) ? desc : "$(describe(button, mods...)) (doubleclick): $desc"
-#    mods = modbits(mods)
-#    EventHandler{Doubleclick}(desc) do s, e
-#        e.button == button && modbits(s) == mods && cb(s, e)
-#    end
-#end
-
-function ondrag(cb, button::MouseButton; desc = nothing)
-    desc = isnothing(desc) ? desc : "$(describe(button)) + Drag: $desc"
-    pred(s, e) = e.button == button && iszero(modbits(s))
-    ConditionalEventHandler{MouseDrag}(cb, pred, desc)
+function onclick(cb, button::MouseButton; desc = nothing)
+    EventHandler{ButtonPress}(describe(desc, button)) do s, e
+        e.button == button && iszero(modbits(s)) && cb(s, e)
+    end
 end
-function ondrag(cb, button::MouseButton, mods::Mod...; desc = nothing)
-    desc = isnothing(desc) ? desc : "$(describe(button, mods...)) + drag: $desc"
+
+function onclick(cb, button::MouseButton, mods::Mod...; desc = nothing)
+    desc = describe(desc, button, mods...)
     mods = modbits(mods)
-    pred(s, e) = e.button == button && modbits(s) == mods
-    ConditionalEventHandler{MouseDrag}(cb, pred, desc)
+    EventHandler{ButtonPress}(desc) do s, e
+        e.button == button && modbits(s) == mods && cb(s, e)
+    end
 end
 
-function glfw_lookup_key(x::Integer)
-    for key in instances(GLFW.Key)
-        Int(key) == x && return key
+
+function ondoubleclick(cb, button::MouseButton; desc = nothing)
+    desc = isnothing(desc) ? desc : "$(describe(button)) (doubleclick): $desc"
+    EventHandler{Doubleclick}(desc) do s, e
+        e.button == button && iszero(modbits(s)) && cb(s, e)
     end
-    error("Key with unicode value $x not found")
 end
-glfw_lookup_key(s::AbstractString) = glfw_lookup_key(str2unicode(s))
+
+function ondoubleclick(cb, button::MouseButton, mods::Mod...; desc = nothing)
+    desc = isnothing(desc) ? desc : "$(describe(button, mods...)) (doubleclick): $desc"
+    mods = modbits(mods)
+    EventHandler{Doubleclick}(desc) do s, e
+        e.button == button && modbits(s) == mods && cb(s, e)
+    end
+end
+
+
+function onscroll(cb; desc = nothing)
+    desc = isnothing(desc) ? desc : "Scroll: $desc"
+    EventHandler{Scroll}(desc) do s, e
+        iszero(modbits(s)) && !iszero(e.dy) && cb(s, e)
+    end
+end
+
+function onscroll(cb, mods::Mod...; desc = nothing)
+    desc = isnothing(desc) ? desc : "$(describe(mods...)) + Scroll: $desc"
+    mods = modbits(mods)
+    EventHandler{Scroll}(desc) do s, e
+        modbits(s) == mods && !iszero(e.dy) && cb(s, e)
+    end
+end

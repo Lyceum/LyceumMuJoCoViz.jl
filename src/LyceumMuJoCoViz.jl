@@ -2,12 +2,8 @@ module LyceumMuJoCoViz
 
 using Base: RefValue, @lock, @lock_nofail
 
-# Stdlib
-using Printf: @printf
-
-# 3rd party
-using GLFW: GLFW, Window, Key, Action, MouseButton, GetKey, RELEASE, PRESS, REPEAT
-using PrettyTables: pretty_table
+import GLFW
+using GLFW: Window, Key, Action, MouseButton, GetKey
 using BangBang: @set!!
 using StaticArrays: SVector, MVector
 using DocStringExtensions
@@ -157,7 +153,25 @@ function runui(e::Engine)
         end
         GLFW.DestroyWindow(e.mngr.state.window)
     end
-    return
+
+    nothing
+end
+
+function render!(e::Engine)
+    w, h = GLFW.GetFramebufferSize(e.mngr.state.window)
+    rect = mjrRect(Cint(0), Cint(0), Cint(w), Cint(h))
+    smallrect = mjrRect(Cint(0), Cint(0), Cint(w), Cint(h))
+
+    mjr_render(rect, e.ui.scn, e.ui.con)
+
+    e.ui.showinfo && showinfo!(rect, e)
+
+    # should happen last to include all overlays
+    !isnothing(e.ffmpeghandle) && recordframe!(e, rect)
+
+    GLFW.SwapBuffers(e.mngr.state.window)
+
+    e
 end
 
 function prepare!(e::Engine)
