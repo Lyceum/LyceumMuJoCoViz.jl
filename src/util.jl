@@ -65,17 +65,10 @@ seconds.
     dt > 0 || error("dt must be > 0")
     t0 = time()
     while time() - t0 < dt end
-    return nothing
+    nothing
 end
 
 @inline function str2unicode(s::AbstractString)
     length(s) == 1 || error("s must be a single length string")
-    return Int(first(s))
-end
-
-# From PrettyTables.jl: https://github.com/ronisbr/PrettyTables.jl/blob/d8a948a2dd14df66852c9702387c13f4dfce30d8/src/backends/text/print.jl#L50
-function get_terminalsize()
-    return withenv("LINES" => -1, "COLUMNS" => -1) do
-        displaysize(stdout)
-    end
+    Int(first(s))
 end
