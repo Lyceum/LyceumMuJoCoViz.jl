@@ -113,12 +113,10 @@ function setup!(ui::UIState, phys::PhysicsState, p::Playback)
 end
 
 function forwardstep!(phys::PhysicsState, p::Playback)
-    spinwait(0.05)
     p.t = inc(p.t, 1, getT(p))
     setstate!(p, phys, p.k, p.t)
 end
 function reversestep!(phys::PhysicsState, p::Playback)
-    spinwait(0.05)
     p.t = dec(p.t, 1, getT(p))
     setstate!(p, phys, p.k, p.t)
 end
