@@ -122,23 +122,50 @@ function prepare!(ui::UIState, p::PhysicsState, m::Playback)
     return ui
 end
 
-function modeinfo(io1, io2, ui::UIState, p::PhysicsState, m::Playback)
-    println(io1, "t")
-    println(io2, "$(m.t)/$(getT(m))")
-    println(io1, "k")
-    println(io2, "$(m.k)/$(length(m.trajectories))")
+function handlers(ui::UIState, phys::PhysicsState, p::Playback)
+    return [
+        onkeypress(
+            GLFW.KEY_B,
+            desc = "Toggle burst mode: render snapshots of entire trajectory",
+        ) do state, ev
+            p.burstmode = !p.burstmode
+        end,
+        onscroll(MOD_CONTROL, desc = "Change burst factor") do state, ev
+            traj, state, T = getcurrent(p)
+            par = burstmodeparams(phys, traj)
+            p.burstfactor = clamp(
+                p.burstfactor + Float64(sign(ev.dy)) * par.scrollfactor,
+                par.minburst,
+                par.maxburst,
+            )
+        end,
+        onscroll(MOD_SHIFT, desc = "Change burst decay rate") do state, ev
+            traj, state, T = getcurrent(p)
+            par = burstmodeparams(phys, traj)
+            p.burstgamma = clamp(
+                p.burstgamma + ev.dy * par.gammascrollfactor,
+                par.mingamma,
+                1,
+            )
+        end,
 
-    n = length(m.bf_range)
-    println(io1, "Burst Mode")
-    println(io2, m.burstmode ? "Enabled" : "Disabled")
-    println(io1, "Burst Factor")
-    println(io2, "$(m.bf_idx)/$n")
-    println(io1, "Burst Gamma")
-    println(io2, "$(m.bg_idx)/$n")
-    println(io1, "Burst Doppler")
-    println(io2, m.doppler ? "Enabled" : "Disabled")
-
-    return nothing
+        onkeypress(
+            GLFW.KEY_UP,
+            desc = "Cycle forwards through trajectories",
+        ) do state, ev
+            p.k = inc(p.k, 1, length(p.trajectories))
+            p.t = checkbounds(Bool, p.trajectories[p.k], :, p.t) ? p.t : firstindex(p.trajectories[p.k])
+            setstate!(p, phys, p.k, p.t)
+        end,
+        onkeypress(
+            GLFW.KEY_DOWN,
+            desc = "Cycle backwards through trajectories",
+        ) do state, ev
+            p.k = dec(p.k, 1, length(p.trajectories))
+            p.t = checkbounds(Bool, p.trajectories[p.k], :, p.t) ? p.t : firstindex(p.trajectories[p.k])
+            setstate!(p, phys, p.k, p.t)
+        end,
+    ]
 end
 
 function handlers(ui::UIState, p::PhysicsState, m::Playback)

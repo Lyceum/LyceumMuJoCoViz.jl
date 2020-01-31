@@ -266,20 +266,20 @@ mutable struct WindowState
     end
 end
 
-@inline function ispressed(s::WindowState, button::MouseButton)
-    button === GLFW.MOUSE_BUTTON_LEFT && return s.left
-    button === GLFW.MOUSE_BUTTON_MIDDLE && return s.middle
-    button === GLFW.MOUSE_BUTTON_RIGHT && return s.right
-    return GLFW.GetMouseButton(s.window, button)
+function ispressed(s::WindowState, button::MouseButton)
+    button == GLFW.MOUSE_BUTTON_LEFT && return s.left
+    button == GLFW.MOUSE_BUTTON_MIDDLE && return s.middle
+    button == GLFW.MOUSE_BUTTON_RIGHT && return s.right
+    GLFW.GetMouseButton(s.window, button)
 end
 
-@inline function modbits(s::WindowState)
+function modbits(s::WindowState)
     m = Cint(0)
     s.alt && (m |= Integer(MOD_ALT))
     s.shift && (m |= Integer(MOD_SHIFT))
     s.control && (m |= Integer(MOD_CONTROL))
     s.super && (m |= Integer(MOD_SUPER))
-    return m
+    m
 end
 
 @inline nomod(s::WindowState) = iszero(modbits(s))
@@ -354,14 +354,24 @@ function trigger!(mngr::WindowManager, e::Event)
     @debug e
     entry = ObsEntry(mngr.state, e)
     s, events = mngr.state, mngr.events
-
-    if e isa KeyEvent
-        events.key[] = entry
-    elseif e isa ButtonEvent
-        events.button[] = entry
-    elseif e isa MouseMoveEvent
-        events.mouse[] = entry
-    elseif e isa ScrollEvent
+    if e isa KeyPress
+        events.keypress[] = entry
+        s.lastkey = e
+    elseif e isa KeyRelease
+        events.keyrelease[] = entry
+        s.lastkey = e
+    elseif e isa KeyRepeat
+        events.keyrepeat[] = entry
+        s.lastkey = e
+    elseif e isa ButtonPress
+        events.buttonpress[] = entry
+        s.lastbutton = e
+    elseif e isa ButtonRelease
+        events.buttonrelease[] = entry
+        s.lastbutton = e
+    elseif e isa CursorPos
+        events.cursor[] = entry
+    elseif e isa Scroll
         events.scroll[] = entry
     elseif e isa WindowResizeEvent
         events.windowresize[] = entry
@@ -378,7 +388,7 @@ function trigger!(mngr::WindowManager, e::Event)
 function keycb!(mngr::WindowManager, key::Key, ::Cint, action::Action, mods::Cint)
     s = mngr.state
     status = ispress(action) || isrepeat(action)
-
+    s = mngr.state
     if isalt(key)
         s.alt = status
     elseif isshift(key)
@@ -402,8 +412,7 @@ function keycb!(mngr::WindowManager, key::Key, ::Cint, action::Action, mods::Cin
 end
 
 function cursorposcb!(mngr::WindowManager, x, y)
-    s = mngr.state
-
+    s, events = mngr.state, mngr.events
     t = time()
     dx = x - s.x
     dy = y - s.y
@@ -411,9 +420,17 @@ function cursorposcb!(mngr::WindowManager, x, y)
     s.y = y
     isdrag = !isnothing(s.lastbuttonevent) && ispressed(s, s.lastbuttonevent.button)
 
-    trigger!(mngr, MouseMoveEvent(dx, dy, isdrag, t))
+    dx = x - s.x
+    dy = y - s.y
+    s.x = x
+    s.y = y
 
-    return
+    trigger!(mngr, CursorPos(x, y, t))
+    if !isnothing(s.lastbutton) && ispressed(mngr.state, s.lastbutton.button)
+        trigger!(mngr, MouseDrag(dx, dy, s.lastbutton.button, t))
+    end
+
+    nothing
 end
 
 function isdoubleclick(mngr::WindowManager, button, action, mods, t)
@@ -460,10 +477,11 @@ function mousebuttoncb!(
 end
 
 function scrollcb!(mngr::WindowManager, dx, dy)
-    mngr.state.sx += dx
-    mngr.state.sy += dy
-    trigger!(mngr, ScrollEvent(dx, dy, time()))
-    return
+    s = mngr.state
+    s.sx += dx
+    s.sy += dy
+    trigger!(mngr, Scroll(dx, dy))
+    nothing
 end
 
 function windowsizecb!(mngr::WindowManager, width, height)

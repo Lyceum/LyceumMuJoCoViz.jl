@@ -1,14 +1,36 @@
 const STEPSPERKEY = 1
 const SHIFTSTEPSPERKEY = 50
 
+function move_pert_or_cam(
+    ui::UIState,
+    phys::PhysicsState,
+    s::WindowState,
+    ev::MouseDrag,
+)
+    sim = getsim(phys.model)
+    scaled_dx, scaled_dy = ev.dx / s.width, ev.dy / s.height
+
+    if s.right
+        action = s.shift ? MJCore.mjMOUSE_MOVE_H : MJCore.mjMOUSE_MOVE_V
+    elseif s.left
+        action = s.shift ? MJCore.mjMOUSE_ROTATE_H : MJCore.mjMOUSE_ROTATE_V
+    else
+        action = MJCore.mjMOUSE_ZOOM
+    end
 
 function default_mousemovecb(e::Engine, s::WindowState, ev::MouseMoveEvent)
     p = e.phys
     sim = getsim(p.model)
     ui = e.ui
 
-    if ev.isdrag
-        # Move free camera
+function default_mousecb(e::Engine, s::WindowState, ev::Doubleclick)
+    if isleft(ev.button)
+        selmode = 1
+    elseif (ismiddle(ev.button) || isright(ev.button)) && s.control
+        selmode = 3
+    elseif isright(ev.button)
+        selmode = 2
+    end
 
         scaled_dx = ev.dx / s.width
         scaled_dy = ev.dy / s.height
@@ -22,29 +44,29 @@ function default_mousemovecb(e::Engine, s::WindowState, ev::MouseMoveEvent)
         end
 
 function gen_backstep_event(e::Engine)
-    l1 = onkeypress(GLFW.KEY_LEFT) do state, event
+    l1 = onkeypress(GLFW.KEY_LEFT) do s, ev
         if e.ui.paused
             for _ = 1:STEPSPERKEY
                 reversestep!(e.phys, mode(e))
             end
         end
     end
-    l2 = onevent(KeyRepeat) do state, event
-        if event.key == GLFW.KEY_LEFT && e.ui.paused
+    l2 = onevent(KeyRepeat) do s, ev
+        if ev.key == GLFW.KEY_LEFT && e.ui.paused
             for _ = 1:STEPSPERKEY
                 reversestep!(e.phys, mode(e))
             end
         end
     end
-    l3 = onkeypress(GLFW.KEY_LEFT, MOD_SHIFT) do state, event
+    l3 = onkeypress(GLFW.KEY_LEFT, MOD_SHIFT) do s, ev
         if e.ui.paused
             for _ = 1:SHIFTSTEPSPERKEY
                 reversestep!(e.phys, mode(e))
             end
         end
     end
-    l4 = onevent(KeyRepeat) do state, event
-        if event.key == GLFW.KEY_LEFT && state.shift && e.ui.paused
+    l4 = onevent(KeyRepeat) do s, ev
+        if ev.key == GLFW.KEY_LEFT && s.shift && e.ui.paused
             for _ = 1:SHIFTSTEPSPERKEY
                 reversestep!(e.phys, mode(e))
             end
@@ -55,29 +77,29 @@ function gen_backstep_event(e::Engine)
 end
 
 function gen_forwardstep_event(e::Engine)
-    r1 = onkeypress(GLFW.KEY_RIGHT) do state, event
+    r1 = onkeypress(GLFW.KEY_RIGHT) do s, ev
         if e.ui.paused
             for _ = 1:STEPSPERKEY
                 forwardstep!(e.phys, mode(e))
             end
         end
     end
-    r2 = onevent(KeyRepeat) do state, event
-        if event.key == GLFW.KEY_RIGHT && e.ui.paused
+    r2 = onevent(KeyRepeat) do s, ev
+        if ev.key == GLFW.KEY_RIGHT && e.ui.paused
             for _ = 1:STEPSPERKEY
                 forwardstep!(e.phys, mode(e))
             end
         end
     end
-    r3 = onkeypress(GLFW.KEY_RIGHT, MOD_SHIFT) do state, event
+    r3 = onkeypress(GLFW.KEY_RIGHT, MOD_SHIFT) do s, ev
         if e.ui.paused
             for _ = 1:SHIFTSTEPSPERKEY
                 forwardstep!(e.phys, mode(e))
             end
         end
     end
-    r4 = onevent(KeyRepeat) do state, event
-        if event.key == GLFW.KEY_RIGHT && state.shift && e.ui.paused
+    r4 = onevent(KeyRepeat) do s, ev
+        if ev.key == GLFW.KEY_RIGHT && s.shift && e.ui.paused
             for _ = 1:SHIFTSTEPSPERKEY
                 forwardstep!(e.phys, mode(e))
             end
@@ -91,32 +113,43 @@ function handlers(e::Engine)
         ui = e.ui,
         phys = e.phys
         return [
-            onkeypress(GLFW.KEY_F1, desc = "Show help message") do state, event
+            onkeypress(GLFW.KEY_F1, desc = "Show help message") do s, ev
                 print(e.handlerdescription)
             end,
-
-            onevent(MouseMoveEvent) do s, ev
-                default_mousemovecb(e, s, ev)
+            onkeypress(GLFW.KEY_F2, desc = "Toggle simulation info") do s, ev
+                ui.showinfo = !ui.showinfo
+            end,
+            onkeypress(GLFW.KEY_F11, desc = "Toggle fullscreen") do s, ev
+                ismax = GLFW.GetWindowAttrib(s.window, GLFW.MAXIMIZED)
+                iszero(ismax) ? GLFW.MaximizeWindow(s.window) :
+                GLFW.RestoreWindow(s.window)
             end,
 
 
             onkey(GLFW.KEY_F1, what = "Show help message") do s, ev
                 ispress_or_repeat(ev.action) && printhelp(e)
             end,
-
-            onkey(GLFW.KEY_F2, what = "Toggle simulation info") do s, ev
-                ispress_or_repeat(ev.action) && (ui.showinfo = !ui.showinfo)
+            onkeypress(GLFW.KEY_R, desc = "Toggle reverse") do s, ev
+                ui.reversed = !ui.reversed
+                phys.timer.rate *= -1
+                resettime!(phys)
             end,
-
-            onkey(GLFW.KEY_F11, what = "Toggle fullscreen") do s, ev
-                if ispress_or_repeat(ev.action)
-                    ismin = iszero(GLFW.GetWindowAttrib(s.window, GLFW.MAXIMIZED))
-                    ismin ? GLFW.MaximizeWindow(s.window) : GLFW.RestoreWindow(s.window)
+            onkeypress(GLFW.KEY_ENTER, desc = "Toggle speed mode") do s, ev
+                if ui.speedmode
+                    ui.speedmode = false
+                    setrate!(phys.timer, 1)
+                else
+                    ui.speedmode = true
+                    setrate!(phys.timer, ui.speedfactor)
                 end
             end,
 
-            onkey(GLFW.KEY_ESCAPE, what = "Quit") do s, ev
-                ispress_or_repeat(ev.action) && (ui.shouldexit = true)
+            onkeypress(
+                GLFW.KEY_A,
+                MOD_CONTROL,
+                desc = "Align camera scale",
+            ) do s, ev
+                alignscale!(ui, sim)
             end,
 
             gen_forwardstep_event(e),
@@ -136,62 +169,73 @@ function handlers(e::Engine)
                 ui.vopt[].label = inc(ui.vopt[].label, 0, Int(MJCore.mjNLABEL) - 1)
             end,
 
-            onkey(GLFW.KEY_V, what = "Toggle video recording") do s, ev
-                if ispress(ev.action)
-                    e.ffmpeghandle === nothing ? startrecord!(e) : stoprecord!(e)
+            onkeypress(
+                GLFW.KEY_PAGE_UP,
+                desc = "Cycle engine mode forward",
+            ) do s, ev
+                switchmode!(e, inc(e.curmodeidx, 1, length(e.modes)))
+            end,
+            onkeypress(
+                GLFW.KEY_PAGE_DOWN,
+                desc = "Cycle engine mode backwards",
+            ) do s, ev
+                switchmode!(e, dec(e.curmodeidx, 1, length(e.modes)))
+            end,
+
+            onkeypress(GLFW.KEY_SPACE, desc = "Pause") do s, ev
+                if ui.paused
+                    start!(phys.timer)
+                    ui.paused = false
+                else
+                    stop!(phys.timer)
+                    ui.paused = true
                 end
             end,
 
-            onkey(GLFW.KEY_BACKSPACE, what = "Reset model") do s, ev
-                ispress_or_repeat(ev.action) && reset!(p, mode(e))
+            onkeypress(GLFW.KEY_V, desc = "Toggle video recording") do s, ev
+                isnothing(e.ffmpeghandle) ? startrecord!(e) : finishrecord!(e)
             end,
 
-            onkey(GLFW.KEY_R, what = "Toggle reverse") do s, ev
-                if ispress_or_repeat(ev.action)
-                    ui.reversed = !ui.reversed
-                    p.timer.rate *= -1
-                    resettime!(p)
-                end
-            end,
-
-
-            onkey(GLFW.KEY_SPACE, what = "Pause") do s, ev
-                if ispress_or_repeat(ev.action)
-                    ui.paused ? start!(p.timer) : stop!(p.timer)
-                    ui.paused = !ui.paused
-                end
-            end,
-
-            onevent(ButtonPress) do state, event
-                if !ismiddle(event.button) && state.control && pert[].select > 0
-                    newperturb = state.right ? Int(MJCore.mjPERT_TRANSLATE) : Int(MJCore.mjPERT_ROTATE)
+            onevent(ButtonPress) do s, ev
+                if !ismiddle(ev.button) && s.control && pert[].select > 0
+                    newperturb = s.right ? Int(MJCore.mjPERT_TRANSLATE) : Int(MJCore.mjPERT_ROTATE)
                     # perturbation onset: reset reference
                     iszero(pert[].active) && mjv_initPerturb(sim.m, sim.d, ui.scn, pert)
                     pert[].active = newperturb
                 end
             end,
 
-            onevent(ButtonRelease) do state, event
-                isright(event.button) || isleft(event.button) && (pert[].active = 0)
+            onevent(ButtonRelease) do s, ev
+                isright(ev.button) || isleft(ev.button) && (pert[].active = 0)
             end,
 
-
-            onkey(GLFW.KEY_ENTER, what = "Toggle speed mode") do s, ev
-                if ispress_or_repeat(ev.action)
-                    ui.speedmode = !ui.speedmode
-                    setrate!(p.timer, ui.speedmode ? ui.speedfactor : 1)
-                end
+            onscroll(desc = "Zoom camera") do s, ev
+                mjv_moveCamera(
+                    sim.m,
+                    MJCore.mjMOUSE_ZOOM,
+                    0.0,
+                    0.05 * ev.dy,
+                    ui.scn,
+                    ui.cam,
+                )
             end,
 
-            onkey(GLFW.KEY_UP, MOD_SHIFT, what = "Increase sim rate in speedmode") do s, ev
-                if ispress_or_repeat(ev.action)
+            onkeypress(
+                GLFW.KEY_UP,
+                MOD_SHIFT,
+                desc = "Increase sim rate in speedmode",
+            ) do s, ev
+                if ui.speedmode
                     ui.speedfactor *= 2
                     setrate!(p.timer, ui.speedfactor)
                 end
             end,
-
-            onkey(GLFW.KEY_DOWN, MOD_SHIFT, what = "Decrease sim rate in speedmode") do s, ev
-                if ispress_or_repeat(ev.action)
+            onkeypress(
+                GLFW.KEY_DOWN,
+                MOD_SHIFT,
+                desc = "Decrease sim rate in speedmode",
+            ) do s, ev
+                if ui.speedmode
                     ui.speedfactor /= 2
                     setrate!(p.timer, ui.speedfactor)
                 end
@@ -204,36 +248,8 @@ function handlers(e::Engine)
                 end
             end,
 
-            onkey(GLFW.KEY_PAGE_DOWN, what = "Cycle engine mode backwards") do s, ev
-                if ispress_or_repeat(ev.action)
-                    switchmode!(e, dec(e.curmodeidx, 1, length(e.modes)))
-                end
-            end,
-
-
-            onkey(GLFW.KEY_MINUS, what = "Cycle label mode backwards") do s, ev
-                if ispress_or_repeat(ev.action)
-                    ui.vopt[].label = dec(ui.vopt[].label, 0, Int(MJCore.mjNLABEL) - 1)
-                end
-            end,
-
-            onkey(GLFW.KEY_EQUAL, what = "Cycle label mode forward") do s, ev
-                if ispress_or_repeat(ev.action)
-                    ui.vopt[].label = inc(ui.vopt[].label, 0, Int(MJCore.mjNLABEL) - 1)
-                end
-            end,
-
-
-            onkey(GLFW.KEY_LEFT_BRACKET, what = "Cycle frame mode backwards") do s, ev
-                if ispress_or_repeat(ev.action)
-                    ui.vopt[].frame = dec(ui.vopt[].frame, 0, Int(MJCore.mjNFRAME) - 1)
-                end
-            end,
-
-            onkey(GLFW.KEY_RIGHT_BRACKET, what = "Cycle frame mode forward") do s, ev
-                if ispress_or_repeat(ev.action)
-                    ui.vopt[].frame = inc(ui.vopt[].frame, 0, Int(MJCore.mjNFRAME) - 1)
-                end
+            onevent(MouseDrag) do s, ev
+                move_pert_or_cam(ui, phys, s, ev)
             end,
 
             gen_mjflag_events(ui)...
