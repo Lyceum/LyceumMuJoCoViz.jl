@@ -68,8 +68,9 @@ mutable struct Playback{TR<:AbstractVector{<:AbstractMatrix{<:Real}}} <: EngineM
     bf_range::LinRange{Float64}
     bg_idx::Int
     bg_range::LinRange{Float64}
+    doppler::Bool
     function Playback{TR}(trajectories) where {TR<:AbstractVector{<:AbstractMatrix{<:Real}}}
-        new{TR}(trajectories, 1, 1, false, 1, LinRange(0, 1, 2), 1, LinRange(0, 1, 2))
+        new{TR}(trajectories, 1, 1, false, 1, LinRange(0, 1, 2), 1, LinRange(0, 1, 2), false)
     end
 end
 Playback(trajectories::AbstractMatrix{<:Real}) = Playback([trajectories])
@@ -96,7 +97,7 @@ function prepare!(ui::UIState, p::PhysicsState, m::Playback)
     if m.burstmode
         bf = round(Int, m.bf_range[m.bf_idx])
         bg = m.bg_range[m.bg_idx]
-        burst!(ui, p, gettraj(m), bf, m.t, gamma = bg)
+        burst!(ui, p, gettraj(m), bf, m.t, gamma = bg, doppler = m.doppler)
     end
 end
 
@@ -121,6 +122,12 @@ function handlers(ui::UIState, p::PhysicsState, m::Playback)
 
             onkey(GLFW.KEY_B, what = "Toggle burst mode") do s, ev
                 ispress_or_repeat(ev.action) && (m.burstmode = !m.burstmode)
+            end,
+
+            onkey(GLFW.KEY_D, what = "Toggle burst mode doppler effect") do s, ev
+                if m.burstmode && ispress_or_repeat(ev.action)
+                    m.doppler = !m.doppler
+                end
             end,
 
             onkey(GLFW.KEY_UP, what = "Cycle forwards through trajectories") do s, ev
@@ -154,7 +161,7 @@ function setburstmodeparams!(m::Playback, p::PhysicsState)
     # with a timestep of dt0 and gamma0 looks reasonalbe.
     len0 = 100
     bf0_max = 50
-    gamma0 = 0.9
+    gamma0 = 0.85
     dt0 = 0.01
 
     dt = timestep(p.model)
@@ -193,6 +200,7 @@ function burst!(
     gamma::Real = 0.9995,
     alphamin::Real = 0.05,
     alphamax::Real = 0.55,
+    doppler::Bool = true,
 )
     T = size(states, 2)
 
@@ -202,12 +210,39 @@ function burst!(
     0 < alphamin <= 1 || error("alphamin must be in range (0, 1]")
     0 < alphamax <= 1 || error("alphamin must be in range (0, 1]")
 
-    # not an error, but only the current state can be rendered so nothing to "burst"
-    n == 1 && return
-
     scn = ui.scn
     sim = getsim(p.model)
     n = min(n, fld(MAXGEOM, sim.m.ngeom))
+    geoms = unsafe_wrap(Array, scn[].geoms, scn[].maxgeom)
+
+    function color!(tprime, from)
+        for i = from:scn[].ngeom
+            geom = @inbounds geoms[i]
+            if geom.category == Int(MJCore.mjCAT_DYNAMIC)
+                dist = abs(tprime - t)
+                r, g, b, alpha0 = geom.rgba
+
+                alpha = alpha0 * gamma^dist
+
+                if doppler
+                    g = 0
+                    if tprime < t
+                        beta = (dist + 1) / t / 2 + 0.5
+                        r = beta * r
+                        b = (1 - beta) * b
+                    else
+                        beta = dist / (T - t) / 2 + 0.5
+                        r = (1 - beta) * r
+                        b = beta * b
+                    end
+                    r = clamp(r, 0, 1)
+                    b = clamp(b, 0, 1)
+                end
+
+                geoms[i] = @set!! geom.rgba = SVector{4,Cfloat}(r, g, b, alpha)
+            end
+        end
+    end
 
     LyceumMuJoCo.setstate!(p.model, view(states, :, t))
     mjv_updateScene(
@@ -220,38 +255,29 @@ function burst!(
         scn,
     )
 
-    maxdist = max(t - 1, T - t)
-    from = scn[].ngeom + 1
-    function color!(tprime)
-        geoms = unsafe_wrap(Array, scn[].geoms, scn[].ngeom)
-        for i = from:scn[].ngeom
-            geom = geoms[i]
-            if geom.category == Int(MJCore.mjCAT_DYNAMIC)
-                dist = abs(tprime - t)
-                r, g, b, alpha0 = geom.rgba
-                alpha = alpha0 * gamma^dist
-                geom = @set!! geom.rgba = SVector{4,Cfloat}(r, g, b, alpha)
-                geoms[i] = geom
-            end
-        end
+    doppler && color!(t, 1)
+
+    if n > 1
+        fromidx = scn[].ngeom + 1
         from = scn[].ngeom + 1
+        for tprime in Iterators.map(x -> round(Int, x), LinRange(1, T, n))
+            if tprime != t
+                LyceumMuJoCo.setstate!(p.model, view(states, :, tprime))
+                mjv_addGeoms(
+                    sim.m,
+                    sim.d,
+                    ui.vopt,
+                    p.pert,
+                    MJCore.mjCAT_DYNAMIC,
+                    scn,
+                )
+                color!(tprime, from)
+            end
+            from = scn[].ngeom + 1
+        end
     end
 
-    fromidx = scn[].ngeom + 1
-    for tprime in Iterators.map(x -> round(Int, x), LinRange(1, T, n))
-        tprime == t && continue
-        LyceumMuJoCo.setstate!(p.model, view(states, :, tprime))
-        mjv_addGeoms(
-            sim.m,
-            sim.d,
-            ui.vopt,
-            p.pert,
-            MJCore.mjCAT_DYNAMIC,
-            scn,
-        )
-        color!(tprime)
-    end
-
+    # reset the model to the state it had when it was passed in
     LyceumMuJoCo.setstate!(p.model, view(states, :, t))
 end
 
