@@ -48,7 +48,7 @@ mutable struct Engine{T,M<:Tuple}
     handlerdescription::String
 
     modes::M
-    modehandlers::Vector{AbstractEventHandler}
+    modehandlers::Vector{EventHandler}
     modehandlerdescription::String
     curmodeidx::Int
 
@@ -94,12 +94,10 @@ mutable struct Engine{T,M<:Tuple}
                 UInt8[],
             )
 
-            enginehandlers = convert(Vector{<:AbstractEventHandler}, handlers(e))
+            enginehandlers = handlers(e)
             register!(mngr, enginehandlers...)
             writedescription!(io, enginehandlers)
             e.handlerdescription = String(take!(io))
-
-            on((o) -> default_mousecb(e, o.state, o.event), mngr.events.doubleclick)
 
             return e
         catch e

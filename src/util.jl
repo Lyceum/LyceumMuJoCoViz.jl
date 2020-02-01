@@ -1,3 +1,14 @@
+const ASCII = raw"""
+  _
+ | |
+ | |    _   _  ___ ___ _   _ _ __ ___
+ | |   | | | |/ __/ _ \ | | | '_ ` _ \
+ | |___| |_| | (_|  __/ |_| | | | | | |
+ |______\__, |\___\___|\__,_|_| |_| |_|
+         __/ |
+        |___/
+"""
+
 function str2vec(s::String, len::Int)
     str = zeros(UInt8, len)
     str[1:length(s)] = codeunits(s)
