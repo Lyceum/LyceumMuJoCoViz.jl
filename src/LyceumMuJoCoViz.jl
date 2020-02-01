@@ -3,7 +3,8 @@ module LyceumMuJoCoViz
 using Base: RefValue, @lock, @lock_nofail
 
 import GLFW
-using GLFW: Window, Key, Action, MouseButton, GetKey
+using GLFW: Window, Key, Action, MouseButton, GetKey, RELEASE, PRESS, REPEAT
+using PrettyTables: pretty_table
 using BangBang: @set!!
 using StaticArrays: SVector, MVector
 using DocStringExtensions
@@ -22,7 +23,8 @@ export visualize
 
 const FONTSCALE = MJCore.FONTSCALE_150 # can be 100, 150, 200
 const MAXGEOM = 10000 # preallocated geom array in mjvScene
-const MIN_REFRESHRATE = 30 # minimum rate when sim cannot run at the native refresh rate
+const MIN_REFRESHRATE = 60 # minimum effective refreshrate
+const RENDERGAMMA = 0.9
 const SIMGAMMA = 0.99
 const RNDGAMMA = 0.9
 const VIDFPS = 40
@@ -108,7 +110,14 @@ function run(e::Engine)
     GLFW.ShowWindow(e.mngr.state.window)
 
     # run the simulation/mode in second thread
-    modetask = Threads.@spawn runphysics(e)
+    modetask = Threads.@spawn runmode!(e)
+
+    print(ASCII)
+    println()
+    printdescription(e)
+
+    runrender(e)
+    wait(modetask)
 
     println(ASCII)
     println("Press \"F1\" to show the help message.")
@@ -212,6 +221,8 @@ function runphysics(e::Engine)
     p = e.phys
     ui = e.ui
     minrefreshrate = min(MIN_REFRESHRATE, GetRefreshRate())
+    maxrender_seconds = 1/minrefreshrate
+
     resettime!(p) # reset sim and world clocks to 0
 
     try
@@ -222,7 +233,9 @@ function runphysics(e::Engine)
 
             if shouldexit
                 break
-            elseif (time() - lastrender) > 1 / minrefreshrate
+            elseif (time() - lastrender) > maxrender_seconds
+                # If current refresh rate less than minimum, then yield to give
+                # render thread a chance to acquire lock
                 yield()
                 continue
             else

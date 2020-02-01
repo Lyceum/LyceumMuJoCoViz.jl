@@ -36,7 +36,8 @@ function switchmode!(e::Engine, idx::Integer)
     writedescription!(io, e.modehandlers)
     e.modehandlerdescription = String(take!(io))
 
-    return e
+
+    e
 end
 
 
@@ -131,29 +132,9 @@ function overlay_info(rect::MJCore.mjrRect, e::Engine)
     println(io1, "Frame")
     println(io2, MJCore.mjFRAMESTRING[e.ui.vopt[].frame+1])
 
-    println(io1, "Label")
-    println(io2, MJCore.mjLABELSTRING[e.ui.vopt[].label+1])
-
-    # env specific info
-    if phys.model isa AbstractMuJoCoEnvironment
-        name = string(Base.nameof(typeof(phys.model)))
-        println(io1, "Env")
-        println(io2, name)
-
-        println(io1, "Reward")
-        @printf io2 "%.5g\n" ui.reward
-
-        println(io1, "Eval")
-        @printf io2 "%.5g\n" ui.eval
-    end
-
-    # mode specific info
-    println(io1, "Mode Info")
-    println(io2)
-    modeinfo(io1, io2, ui, phys, mode(e))
-
-    info1 = string(chomp(String(take!(io1))))
-    info2 = string(chomp(String(take!(io2))))
+    println(io, "Engine Mode: $(nameof(mode(e))).")
+    modeinfo(io, ui, phys, mode(e))
+    infostr = chomp(String(take!(io)))
 
     mjr_overlay(
         MJCore.FONT_NORMAL,
@@ -164,13 +145,35 @@ function overlay_info(rect::MJCore.mjrRect, e::Engine)
         ui.con,
     )
 
-function writedescription!(io, handlers::Vector{<:AbstractEventHandler})
-    for handler in handlers
-        !isnothing(handler.description) && println(io, handler.description)
+function writedescription!(io, hs::Vector{EventHandler})
+    if !isempty(hs)
+        whens = String[]
+        whats = String[]
+        for h in hs
+            if h.when !== nothing && h.what !== nothing
+                push!(whens, h.when)
+                push!(whats, h.what)
+            elseif h.what !== nothing
+                push!(whens, "----")
+                push!(whats, h.what)
+            end
+        end
+        pretty_table(io, hcat(whens, whats), ["Action", "Description"], alignment = :L)
     end
+
     io
 end
 
+function printdescription(e::Engine)
+    println("Standard Commands:")
+    print(e.handlerdescription)
+    if !isempty(e.modehandlerdescription)
+        println("$(nameof(mode(e))) Mode Commands:")
+        print(e.modehandlerdescription)
+    end
+    println()
+    println()
+end
 
 function startrecord!(e::Engine)
     window = e.mngr.state.window
