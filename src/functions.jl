@@ -33,16 +33,12 @@ function switchmode!(e::Engine, idx::Integer)
     e.modehandlers = handlers(e.ui, e.phys, mode(e))
     setup!(e.ui, e.phys, mode(e))
     register!(e.mngr, e.modehandlers...)
-    writedescription!(io, e.modehandlers)
-    e.modehandlerdescription = String(take!(io))
-
 
     e
 end
 
-
 function printhelp(e::Engine)
-    io = e.ui.io1
+    io = e.ui.miscbuf
 
     writedescription(io, e.handlers)
     handlerdescription = String(take!(io))
@@ -59,7 +55,7 @@ function printhelp(e::Engine)
     println()
     println()
 
-    return
+    nothing
 end
 
 function writedescription(io, hs::Vector{EventHandler})
@@ -79,18 +75,17 @@ function writedescription(io, hs::Vector{EventHandler})
         header = ["Command", "Description"]
         _, ncols = get_terminalsize()
         w1max = max(maximum(length, whens), length(first(header)))
-        w2max = max(maximum(length, whats), length(first(header)))
-
         w1 = min(w1max, div(ncols, 2))
-        w2 = min(w2max, ncols - w1 - 4 * length(header)) # each column is padded by 4 spaces
+        w2 = ncols - w1 - 4 * length(header) # each column is padded by 4 spaces
         pretty_table(io, hcat(whens, whats), ["Command", "Description"], alignment = :L, linebreaks = true, autowrap = true, columns_width = [w1, w2])
     end
 
-    return
+    io
 end
 
 
-function overlay_info(rect::MJCore.mjrRect, e::Engine)
+function showinfo!(rect::MJCore.mjrRect, e::Engine)
+    io = e.ui.miscbuf
     ui = e.ui
     io1 = ui.io1
     io2 = ui.io2
@@ -145,35 +140,6 @@ function overlay_info(rect::MJCore.mjrRect, e::Engine)
         ui.con,
     )
 
-function writedescription!(io, hs::Vector{EventHandler})
-    if !isempty(hs)
-        whens = String[]
-        whats = String[]
-        for h in hs
-            if h.when !== nothing && h.what !== nothing
-                push!(whens, h.when)
-                push!(whats, h.what)
-            elseif h.what !== nothing
-                push!(whens, "----")
-                push!(whats, h.what)
-            end
-        end
-        pretty_table(io, hcat(whens, whats), ["Action", "Description"], alignment = :L)
-    end
-
-    io
-end
-
-function printdescription(e::Engine)
-    println("Standard Commands:")
-    print(e.handlerdescription)
-    if !isempty(e.modehandlerdescription)
-        println("$(nameof(mode(e))) Mode Commands:")
-        print(e.modehandlerdescription)
-    end
-    println()
-    println()
-end
 
 function startrecord!(e::Engine)
     window = e.mngr.state.window

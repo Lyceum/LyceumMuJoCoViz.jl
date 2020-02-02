@@ -45,11 +45,10 @@ mutable struct Engine{T,M}
     phys::PhysicsState{T}
     ui::UIState
     mngr::WindowManager
-    handlerdescription::String
+    handlers::Vector{EventHandler}
 
     modes::M
     modehandlers::Vector{EventHandler}
-    modehandlerdescription::String
     curmodeidx::Int
 
     ffmpeghandle::Maybe{Base.Process}
@@ -75,29 +74,22 @@ mutable struct Engine{T,M}
             alignscale!(ui, sim)
             init_figsensor!(ui.figsensor)
 
-            io = IOBuffer()
-            modehandlers = handlers(ui, phys, first(modes))
-            modehandlerdescription = String(take!(writedescription!(io, modehandlers)))
-
             e = new{typeof(model),typeof(modes)}(
                 phys,
                 ui,
                 mngr,
-                "",
+                EventHandler[],
 
                 modes,
-                modehandlers,
-                modehandlerdescription,
+                handlers(ui, phys, first(modes)),
                 1,
 
                 nothing,
                 UInt8[],
             )
 
-            enginehandlers = handlers(e)
-            register!(mngr, enginehandlers...)
-            writedescription!(io, enginehandlers)
-            e.handlerdescription = String(take!(io))
+            e.handlers = handlers(e)
+            register!(mngr, e.handlers...)
 
             return e
         catch e
