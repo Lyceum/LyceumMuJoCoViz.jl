@@ -24,7 +24,7 @@ export visualize
 
 const FONTSCALE = MJCore.FONTSCALE_150 # can be 100, 150, 200
 const MAXGEOM = 10000 # preallocated geom array in mjvScene
-const MIN_REFRESHRATE = 60 # minimum effective refreshrate
+const MIN_REFRESHRATE = 30 # minimum effective refreshrate
 const RENDERGAMMA = 0.9
 const SIMGAMMA = 0.99
 
@@ -105,7 +105,7 @@ function run(e::Engine)
 
     print(ASCII)
     println()
-    printdescription(e)
+    printhelp(e)
 
     runrender(e)
     wait(modetask)
@@ -115,8 +115,8 @@ end
 
 
 function runrender(e::Engine)
+    shouldexit = false
     try
-        shouldexit = false
         while !shouldexit
             @lock e.phys.lock begin
                 GLFW.PollEvents()
@@ -136,7 +136,7 @@ function runrender(e::Engine)
         end
     finally
         @lock e.ui.lock begin
-            e.ui.shouldexit = true
+            e.ui.shouldexit = shouldexit = true
         end
         GLFW.DestroyWindow(e.mngr.state.window)
     end
