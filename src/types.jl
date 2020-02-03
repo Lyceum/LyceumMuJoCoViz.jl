@@ -36,7 +36,8 @@ Base.@kwdef mutable struct UIState
     lastrender::Float64 = 0
     refreshrate::Float64 = 0
     realtimerate::Float64 = 0
-    miscbuf::IOBuffer = IOBuffer()
+    io1::IOBuffer = IOBuffer()
+    io2::IOBuffer = IOBuffer()
 
     lock::ReentrantLock = ReentrantLock()
 end
@@ -68,7 +69,7 @@ mutable struct Engine{T,M}
             mjv_defaultFigure(ui.figsensor)
 
             sim = getsim(model)
-            mjv_makeScene(sim.m, ui.scn, MAXGEOM)
+            mjv_makeScene(sim.m, ui.scn, MAXGEOM) # TODO calculate MAXGEOM form model and moes
             mjr_makeContext(sim.m, ui.con, FONTSCALE)
 
             alignscale!(ui, sim)

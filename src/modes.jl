@@ -5,15 +5,20 @@
 # required
 forwardstep!(p, ::EngineMode) = error("must implement")
 
+supportsreverse(::EngineMode) = false
+function reversestep!(p, m::EngineMode)
+    supportsreverse(m) && error("supportsreverse was true but reversestep! undefined")
+    return p
+end
+
 # optional
 nameof(m::EngineMode) = string(Base.nameof(typeof(m)))
 setup!(ui, p, ::EngineMode) = ui
 teardown!(ui, p, ::EngineMode) = ui
-reset!(p, ::EngineMode) = reset!(p.model)
+reset!(p, ::EngineMode) = (reset!(p.model); p)
 pausestep!(p, ::EngineMode) = pausestep!(p)
-reversestep!(p, ::EngineMode) = p
 prepare!(ui, p, ::EngineMode) = ui
-modeinfo(io, ui, p, ::EngineMode) = nothing
+modeinfo(io1, io2, ui, p, ::EngineMode) = nothing
 handlers(ui, p, ::EngineMode) = EventHandler[]
 
 
@@ -38,19 +43,24 @@ Controller(controller) = Controller(controller, 1.0)
 function setup!(ui::UIState, p::PhysicsState, x::Controller)
     dt = @elapsed x.controller(p.model)
     x.realtimefactor = timestep(p.model) / dt
+    return ui
 end
 
-teardown!(ui::UIState, p::PhysicsState, x::Controller) = zerofullctrl!(getsim(p.model))
+function teardown!(ui::UIState, p::PhysicsState, x::Controller)
+    zerofullctrl!(getsim(p.model))
+    return ui
+end
 
 function forwardstep!(p::PhysicsState, x::Controller)
-    dt = @elapsed x.controller(p.model);
-    rt = timestep(p.model) / dt
-    x.realtimefactor = SIMGAMMA * x.realtimefactor + (1 - SIMGAMMA) * rt
-    forwardstep!(p)
+    dt = @elapsed x.controller(p.model)
+    x.realtimefactor = timestep(p.model) / dt
+    return forwardstep!(p)
 end
 
-function modeinfo(io, ui::UIState, p::PhysicsState, x::Controller)
-    @printf io "Realtime Factor: %.2fx\n" x.realtimefactor
+function modeinfo(io1, io2, ui::UIState, p::PhysicsState, x::Controller)
+    println(io1, "Realtime Factor")
+    @printf io2 "%.2fx\n" x.realtimefactor
+    return nothing
 end
 
 
@@ -79,18 +89,22 @@ Playback(trajectories::AbstractMatrix{<:Real}) = Playback([trajectories])
 function setup!(ui::UIState, p::PhysicsState, m::Playback)
     setburstmodeparams!(m, p)
     setstate!(m, p)
+    return ui
 end
 
-reset!(p::PhysicsState, m::Playback) = (m.t = 1; setstate!(m, p))
+reset!(p::PhysicsState, m::Playback) = (m.t = 1; setstate!(m, p); p)
 
 function forwardstep!(p::PhysicsState, m::Playback)
     m.t = inc(m.t, 1, getT(m))
     setstate!(m, p)
+    return p
 end
 
+supportsreverse(::Playback) = true
 function reversestep!(p::PhysicsState, m::Playback)
     m.t = dec(m.t, 1, getT(m))
     setstate!(m, p)
+    return p
 end
 
 function prepare!(ui::UIState, p::PhysicsState, m::Playback)
@@ -99,25 +113,37 @@ function prepare!(ui::UIState, p::PhysicsState, m::Playback)
         bg = m.bg_range[m.bg_idx]
         burst!(ui, p, gettraj(m), bf, m.t, gamma = bg, doppler = m.doppler)
     end
+    return ui
 end
 
-function modeinfo(io, ui::UIState, p::PhysicsState, m::Playback)
-    println(io, "t=$(m.t)/$(getT(m))    k=$(m.k)/$(length(m.trajectories))")
-    if m.burstmode
-        n = length(m.bf_range)
-        println(io, "Factor: $(m.bf_idx)/$n    Gamma: $(m.bg_idx)/$n")
-    end
+function modeinfo(io1, io2, ui::UIState, p::PhysicsState, m::Playback)
+    println(io1, "t")
+    println(io2, "$(m.t)/$(getT(m))")
+    println(io1, "k")
+    println(io2, "$(m.k)/$(length(m.trajectories))")
+
+    n = length(m.bf_range)
+    println(io1, "Burst Mode")
+    println(io2, m.burstmode ? "Enabled" : "Disabled")
+    println(io1, "Burst Factor")
+    println(io2, "$(m.bf_idx)/$n")
+    println(io1, "Burst Gamma")
+    println(io2, "$(m.bg_idx)/$n")
+    println(io1, "Burst Doppler")
+    println(io2, m.doppler ? "Enabled" : "Disabled")
+
+    return nothing
 end
 
 function handlers(ui::UIState, p::PhysicsState, m::Playback)
-    let ui=ui, p=p, m=m
+    return let ui=ui, p=p, m=m
         [
             onscroll(MOD_CONTROL, what = "Change burst factor") do s, ev
-                m.burstmode && (m.bf_idx = clamp(m.bf_idx + ev.dy, 1, length(m.bf_range)))
+                m.bf_idx = clamp(m.bf_idx + ev.dy, 1, length(m.bf_range))
             end,
 
             onscroll(MOD_SHIFT, what = "Change burst decay rate") do s, ev
-                m.burstmode && (m.bg_idx = clamp(m.bg_idx + ev.dy, 1, length(m.bg_range)))
+                m.bg_idx = clamp(m.bg_idx + ev.dy, 1, length(m.bg_range))
             end,
 
             onkey(GLFW.KEY_B, what = "Toggle burst mode") do s, ev
@@ -125,9 +151,7 @@ function handlers(ui::UIState, p::PhysicsState, m::Playback)
             end,
 
             onkey(GLFW.KEY_D, what = "Toggle burst mode doppler effect") do s, ev
-                if m.burstmode && ispress_or_repeat(ev.action)
-                    m.doppler = !m.doppler
-                end
+                ispress_or_repeat(ev.action) && (m.doppler = !m.doppler)
             end,
 
             onkey(GLFW.KEY_UP, what = "Cycle forwards through trajectories") do s, ev
@@ -173,14 +197,15 @@ function setburstmodeparams!(m::Playback, p::PhysicsState)
     m.bf_range = LinRange{Float64}(1, bf_max, steps) # render between 1 and bf_max states
     m.bg_range = LinRange{Float64}(gamma, 1, steps)
 
-    m.bf_idx = round(Int, round(Int, steps / 2))
-    m.bg_idx = round(Int, round(Int, steps / 2))
+    m.bf_idx = round(Int, steps / 2)
+    m.bg_idx = steps
 
-    m
+    return m
 end
 
 @inline function setstate!(m::Playback, p::PhysicsState)
     LyceumMuJoCo.setstate!(p.model, view(gettraj(m), :, m.t))
+    return m
 end
 
 getT(m::Playback) = size(m.trajectories[m.k], 2)
@@ -255,8 +280,6 @@ function burst!(
         scn,
     )
 
-    doppler && color!(t, 1)
-
     if n > 1
         fromidx = scn[].ngeom + 1
         from = scn[].ngeom + 1
@@ -279,12 +302,15 @@ function burst!(
 
     # reset the model to the state it had when it was passed in
     LyceumMuJoCo.setstate!(p.model, view(states, :, t))
+
+    return ui
 end
 
 function pausestep!(p::PhysicsState)
     sim = getsim(p.model)
     mjv_applyPerturbPose(sim.m, sim.d, p.pert, 1)
     forward!(sim)
+    return p
 end
 
 function forwardstep!(p::PhysicsState)
@@ -293,4 +319,5 @@ function forwardstep!(p::PhysicsState)
     mjv_applyPerturbPose(sim.m, sim.d, p.pert, 0)
     mjv_applyPerturbForce(sim.m, sim.d, p.pert)
     step!(p.model)
+    return p
 end
