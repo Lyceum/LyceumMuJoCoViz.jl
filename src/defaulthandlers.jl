@@ -26,6 +26,10 @@ function default_mousemovecb(e::Engine, s::WindowState, ev::MouseMoveEvent)
         else
             mjv_movePerturb(sim.m, sim.d, action, scaled_dx, scaled_dy, ui.scn, p.pert)
         end
+    end
+
+    return
+end
 
 function default_buttoncb(e::Engine, s::WindowState, ev::ButtonEvent)
     p = e.phys
@@ -97,20 +101,19 @@ function default_buttoncb(e::Engine, s::WindowState, ev::ButtonEvent)
             end
         end
     end
+
+    return
 end
 
 function default_scrollcb(e::Engine, s::WindowState, ev::ScrollEvent)
     m = getsim(e.phys.model).m
     mjv_moveCamera(m, MJCore.mjMOUSE_ZOOM, 0.0, 0.05 * ev.dy, e.ui.scn, e.ui.cam)
+    return
 end
 
 function handlers(e::Engine)
-    let e = e, ui = e.ui, p = e.phys
-        return [
-            ####
-            #### Mouse
-            ####
-
+    return let e = e, ui = e.ui, p = e.phys
+        [
             onevent(ButtonEvent) do s, ev
                 default_buttoncb(e, s, ev)
             end,
@@ -119,14 +122,6 @@ function handlers(e::Engine)
                 default_mousemovecb(e, s, ev)
             end,
 
-            onscroll(what = "Zoom camera") do s, ev
-                default_scrollcb(e, s, ev)
-            end,
-
-
-            ####
-            #### Keys
-            ####
 
             onkey(GLFW.KEY_F1, what = "Show help message") do s, ev
                 ispress_or_repeat(ev.action) && printhelp(e)
@@ -143,6 +138,24 @@ function handlers(e::Engine)
                 end
             end,
 
+            onkey(GLFW.KEY_ESCAPE, what = "Quit") do s, ev
+                ispress_or_repeat(ev.action) && (ui.shouldexit = true)
+            end,
+
+            onscroll(what = "Zoom camera") do s, ev
+                default_scrollcb(e, s, ev)
+            end,
+
+            onkey(GLFW.KEY_A, MOD_CONTROL, what = "Align camera scale") do s, ev
+                ispress_or_repeat(ev.action) && alignscale!(ui, getsim(p.model))
+            end,
+
+            onkey(GLFW.KEY_V, what = "Toggle video recording") do s, ev
+                if ispress(ev.action)
+                    e.ffmpeghandle === nothing ? startrecord!(e) : stoprecord!(e)
+                end
+            end,
+
             onkey(GLFW.KEY_BACKSPACE, what = "Reset model") do s, ev
                 ispress_or_repeat(ev.action) && reset!(p, mode(e))
             end,
@@ -155,20 +168,6 @@ function handlers(e::Engine)
                 end
             end,
 
-            onkey(GLFW.KEY_ENTER, what = "Toggle speed mode") do s, ev
-                if ispress_or_repeat(ev.action)
-                    ui.speedmode = !ui.speedmode
-                    setrate!(p.timer, ui.speedmode ? ui.speedfactor : 1)
-                end
-            end,
-
-            onkey(GLFW.KEY_ESCAPE, what = "Quit") do s, ev
-                ispress_or_repeat(ev.action) && (ui.shouldexit = true)
-            end,
-
-            onkey(GLFW.KEY_A, MOD_CONTROL, what = "Align camera scale") do s, ev
-                ispress_or_repeat(ev.action) && alignscale!(ui, getsim(p.model))
-            end,
 
             onkey(GLFW.KEY_SPACE, what = "Pause") do s, ev
                 if ispress_or_repeat(ev.action)
@@ -177,41 +176,64 @@ function handlers(e::Engine)
                 end
             end,
 
-            onkey(GLFW.KEY_V, what = "Toggle video recording") do s, ev
-                if ispress(ev.action)
-                    isnothing(e.ffmpeghandle) ? startrecord!(e) : stoprecord!(e)
+            onevent(
+                KeyEvent,
+                when = describe(GLFW.KEY_RIGHT),
+                what = "Step forward when paused (hold SHIFT for $(SHIFTSTEPSPERKEY) steps)"
+            ) do s, ev
+                if ui.paused && ev.key === GLFW.KEY_RIGHT && ispress_or_repeat(ev.action)
+                    steps = s.shift ? 50 : 1
+                    for _ = 1:steps
+                        forwardstep!(p, mode(e))
+                    end
                 end
             end,
 
             onevent(
                 KeyEvent,
-                what = "Step forward/back when paused (hold SHIFT for $(SHIFTSTEPSPERKEY) steps)",
-                when = "$(describe(GLFW.KEY_RIGHT))/$(describe(GLFW.KEY_LEFT))"
+                when = describe(GLFW.KEY_LEFT),
+                what = "Step backwards when paused (hold SHIFT for $(SHIFTSTEPSPERKEY) steps)"
             ) do s, ev
-                if ui.paused && ispress_or_repeat(ev.action)
+                if ui.paused && ev.key === GLFW.KEY_LEFT && ispress_or_repeat(ev.action)
                     steps = s.shift ? 50 : 1
-                    if ev.key == GLFW.KEY_RIGHT
-                        for _ = 1:steps
-                            forwardstep!(p, mode(e))
-                        end
-                    elseif ev.key == GLFW.KEY_LEFT
-                        for _ = 1:steps
-                            reversestep!(p, mode(e))
-                        end
+                    for _ = 1:steps
+                        reversestep!(p, mode(e))
                     end
                 end
             end,
 
 
-            onkey(GLFW.KEY_LEFT_BRACKET, what = "Cycle frame mode backwards") do s, ev
+            onkey(GLFW.KEY_ENTER, what = "Toggle speed mode") do s, ev
                 if ispress_or_repeat(ev.action)
-                    ui.vopt[].frame = dec(ui.vopt[].frame, 0, Int(MJCore.mjNFRAME) - 1)
+                    ui.speedmode = !ui.speedmode
+                    setrate!(p.timer, ui.speedmode ? ui.speedfactor : 1)
                 end
             end,
 
-            onkey(GLFW.KEY_RIGHT_BRACKET, what = "Cycle frame mode forward") do s, ev
+            onkey(GLFW.KEY_UP, MOD_SHIFT, what = "Increase sim rate in speedmode") do s, ev
                 if ispress_or_repeat(ev.action)
-                    ui.vopt[].frame = inc(ui.vopt[].frame, 0, Int(MJCore.mjNFRAME) - 1)
+                    ui.speedfactor *= 2
+                    setrate!(p.timer, ui.speedfactor)
+                end
+            end,
+
+            onkey(GLFW.KEY_DOWN, MOD_SHIFT, what = "Decrease sim rate in speedmode") do s, ev
+                if ispress_or_repeat(ev.action)
+                    ui.speedfactor /= 2
+                    setrate!(p.timer, ui.speedfactor)
+                end
+            end,
+
+
+            onkey(GLFW.KEY_PAGE_UP, what = "Cycle engine mode forward") do s, ev
+                if ispress_or_repeat(ev.action)
+                    switchmode!(e, inc(e.curmodeidx, 1, length(e.modes)))
+                end
+            end,
+
+            onkey(GLFW.KEY_PAGE_DOWN, what = "Cycle engine mode backwards") do s, ev
+                if ispress_or_repeat(ev.action)
+                    switchmode!(e, dec(e.curmodeidx, 1, length(e.modes)))
                 end
             end,
 
@@ -229,79 +251,69 @@ function handlers(e::Engine)
             end,
 
 
-            onkey(GLFW.KEY_PAGE_UP, what = "Cycle engine mode forward") do s, ev
-                ispress_or_repeat(ev.action) && switchmode!(e, inc(e.curmodeidx, 1, length(e.modes)))
-            end,
-
-            onkey(GLFW.KEY_PAGE_DOWN, what = "Cycle engine mode backwards") do s, ev
-                ispress_or_repeat(ev.action) && switchmode!(e, dec(e.curmodeidx, 1, length(e.modes)))
-            end,
-
-
-            onkey(GLFW.KEY_UP, MOD_SHIFT, what = "Increase sim rate in speedmode") do s, ev
+            onkey(GLFW.KEY_LEFT_BRACKET, what = "Cycle frame mode backwards") do s, ev
                 if ispress_or_repeat(ev.action)
-                    ui.speedfactor *= 2
-                    setrate!(p.timer, ui.speedfactor)
+                    ui.vopt[].frame = dec(ui.vopt[].frame, 0, Int(MJCore.mjNFRAME) - 1)
                 end
             end,
 
-            onkey(GLFW.KEY_DOWN, MOD_SHIFT, what = "Decrease sim rate in speedmode") do s, ev
+            onkey(GLFW.KEY_RIGHT_BRACKET, what = "Cycle frame mode forward") do s, ev
                 if ispress_or_repeat(ev.action)
-                    ui.speedfactor /= 2
-                    setrate!(p.timer, ui.speedfactor)
+                    ui.vopt[].frame = inc(ui.vopt[].frame, 0, Int(MJCore.mjNFRAME) - 1)
                 end
             end,
 
 
-            #gen_mjflag_handlers(ui)...
+            gen_mjflag_handlers(ui)...
         ]
     end
 end
 
-#function gen_mjflag_handlers(ui::UIState)
-#    handlers = EventHandler[]
-#    vopt = ui.vopt
-#    scn = ui.scn
-#
-#    for i=1:Int(MJCore.mjNVISFLAG)
-#        key = glfw_lookup_key(MJCore.mjVISSTRING[3, i])
-#        name = MJCore.mjVISSTRING[1, i]
-#        h = onkey(key, what = "Toggle $name Viz Flag") do s, ev
-#            ispress_or_repeat(ev.action) && (vopt[].flags = _toggleflag(vopt[].flags, i))
-#        end
-#        push!(handlers, h)
-#    end
-#
-#    for i=1:Int(MJCore.mjNRNDFLAG)
-#        key = glfw_lookup_key(MJCore.mjRNDSTRING[3, i])
-#        name = MJCore.mjRNDSTRING[1, i]
-#        h = onkey(key, what = "Toggle $name Render Flag") do s, ev
-#            ispress_or_repeat(ev.action) && (scn[].flags = _toggleflag(scn[].flags, i))
-#        end
-#        push!(handlers, h)
-#    end
-#
-#    h = onevent(KeyEvent, what = "Toggle Group Groups 1-$(Int(MJCore.mjNGROUP)))") do s, ev
-#        i = Int(ev.key) - Int('0')
-#        if ispress_or_repeat(ev.action) && iszero(modbits(s)) && checkbounds(Bool, vopt[].geomgroup, i)
-#            vopt[].geomgroup = _toggleflag(vopt[].geomgroup, i)
-#        end
-#    end
-#    push!(handlers, h)
-#
-#    h = onevent(KeyEvent, what = "Toggle Site Groups 1-$(Int(MJCore.mjNGROUP)))") do s, ev
-#        i = Int(ev.key) - Int('0')
-#        if ispress_or_repeat(ev.action) && isshift(modbits(s)) && checkbounds(Bool, vopt[].sitegroup, i)
-#            vopt[].sitegroup = _toggleflag(vopt[].sitegroup, i)
-#        end
-#    end
-#    push!(handlers, h)
-#
-#    handlers
-#end
-#
-#@inline function _toggleflag(A::SVector{N,MJCore.mjtByte}, i::Integer) where {N}
-#    A = MVector(A)
-#    A[i] = ifelse(A[i] > 0, 0, 1)
-#    SVector(A)
-#end
+function gen_mjflag_handlers(ui::UIState)
+    handlers = EventHandler[]
+    let vopt = ui.vopt, scn = ui.scn
+        for i=1:Int(MJCore.mjNVISFLAG)
+            key = glfw_lookup_key(MJCore.mjVISSTRING[3, i])
+            name = MJCore.mjVISSTRING[1, i]
+            h = onkey(key, MOD_SHIFT, what = "Toggle $name Viz Flag") do s, ev
+                ispress_or_repeat(ev.action) && (vopt[].flags = _toggle(vopt[].flags, i))
+            end
+            push!(handlers, h)
+        end
+
+        for i=1:Int(MJCore.mjNRNDFLAG)
+            key = glfw_lookup_key(MJCore.mjRNDSTRING[3, i])
+            name = MJCore.mjRNDSTRING[1, i]
+            h = onkey(key, MOD_SHIFT, what = "Toggle $name Render Flag") do s, ev
+                ispress_or_repeat(ev.action) && (scn[].flags = _toggle(scn[].flags, i))
+            end
+            push!(handlers, h)
+        end
+
+
+        n = MJCore.mjNGROUP
+
+        h = onevent(KeyEvent, when = "[1-$n]", what = "Toggle Group Groups 1-$n") do s, ev
+            i = Int(ev.key) - Int('0')
+            if ispress_or_repeat(ev.action) && iszero(modbits(s)) && checkbounds(Bool, vopt[].geomgroup, i)
+                vopt[].geomgroup = _toggle(vopt[].geomgroup, i)
+            end
+        end
+        push!(handlers, h)
+
+        h = onevent(KeyEvent, when = "SHIFT+[1-$n]", what = "Toggle Site Groups 1-$n") do s, ev
+            i = Int(ev.key) - Int('0')
+            if ispress_or_repeat(ev.action) && isshift(modbits(s)) && checkbounds(Bool, vopt[].sitegroup, i)
+                vopt[].sitegroup = _toggle(vopt[].sitegroup, i)
+            end
+        end
+        push!(handlers, h)
+    end
+    return handlers
+end
+
+@inline function _toggle(A::SVector{N,MJCore.mjtByte}, i::Integer) where {N}
+    A = MVector(A)
+    A[i] = ifelse(A[i] > 0, 0, 1)
+    SVector(A)
+end

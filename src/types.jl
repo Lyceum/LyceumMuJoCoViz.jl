@@ -36,7 +36,8 @@ Base.@kwdef mutable struct UIState
     lastrender::Float64 = 0
     refreshrate::Float64 = 0
     realtimerate::Float64 = 0
-    miscbuf::IOBuffer = IOBuffer()
+    io1::IOBuffer = IOBuffer()
+    io2::IOBuffer = IOBuffer()
 
     lock::ReentrantLock = ReentrantLock()
 end

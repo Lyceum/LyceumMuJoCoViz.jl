@@ -1,6 +1,11 @@
+@enum Mod::UInt16 begin
+    MOD_ALT = GLFW.MOD_ALT
+    MOD_SHIFT = GLFW.MOD_SHIFT
+    MOD_CONTROL = GLFW.MOD_CONTROL
+    MOD_SUPER = GLFW.MOD_SUPER
+end
+
 const DOUBLECLICK_THRESHOLD = 0.250
-
-
 
 const PUNCTUATION = let
     chars = [
@@ -27,16 +32,6 @@ const PRINTABLE_KEYS = let
     Set{Int}(keys)
 end
 
-@enum Mod::UInt16 begin
-    MOD_ALT = GLFW.MOD_ALT
-    MOD_SHIFT = GLFW.MOD_SHIFT
-    MOD_CONTROL = GLFW.MOD_CONTROL
-    MOD_SUPER = GLFW.MOD_SUPER
-end
-
-@inline modbits(ms::Tuple{Vararg{Mod}}) = mapreduce(Cint, |, ms)
-@inline modbits(ms::Mod...) = modbits(ms)
-
 
 function SetWindowAttrib(window::Window, attrib::Integer, value::Integer)
     ccall(
@@ -50,7 +45,7 @@ function SetWindowAttrib(window::Window, attrib::Integer, value::Integer)
 end
 
 @inline function GetRefreshRate(monitor::GLFW.Monitor=GLFW.GetPrimaryMonitor())
-    GLFW.GetVideoMode(monitor).refreshrate
+    return GLFW.GetVideoMode(monitor).refreshrate
 end
 
 function default_windowsize()
@@ -70,6 +65,9 @@ end
 create_window(title::String) = create_window(default_windowsize()..., title)
 
 
+@inline modbits(ms::Tuple{Vararg{Mod}}) = mapreduce(Cint, |, ms)
+@inline modbits(ms::Mod...) = modbits(ms)
+
 @inline isleft(b::MouseButton) = b === GLFW.MOUSE_BUTTON_LEFT
 @inline ismiddle(b::MouseButton) = b === GLFW.MOUSE_BUTTON_MIDDLE
 @inline isright(b::MouseButton) = b === GLFW.MOUSE_BUTTON_RIGHT
@@ -79,10 +77,10 @@ create_window(title::String) = create_window(default_windowsize()..., title)
 @inline isrepeat(action::Action) = action === GLFW.REPEAT
 @inline ispress_or_repeat(action::Action) = ispress(action) || isrepeat(action)
 
-@inline isalt(mods::Cint) = (mods & GLFW.MOD_ALT) === GLFW.MOD_ALT
-@inline isshift(mods::Cint) = (mods & GLFW.MOD_SHIFT) === GLFW.MOD_SHIFT
-@inline iscontrol(mods::Cint) = (mods & GLFW.MOD_CONTROL) === GLFW.MOD_CONTROL
-@inline issuper(mods::Cint) = (mods & GLFW.MOD_SUPER) === GLFW.MOD_SUPER
+@inline isalt(mods::Cint) = (mods & GLFW.MOD_ALT) == GLFW.MOD_ALT
+@inline isshift(mods::Cint) = (mods & GLFW.MOD_SHIFT) == GLFW.MOD_SHIFT
+@inline iscontrol(mods::Cint) = (mods & GLFW.MOD_CONTROL) == GLFW.MOD_CONTROL
+@inline issuper(mods::Cint) = (mods & GLFW.MOD_SUPER) == GLFW.MOD_SUPER
 
 @inline isalt(key::Key) = key === GLFW.KEY_LEFT_ALT || key === GLFW.KEY_RIGHT_ALT
 @inline isshift(key::Key) = key === GLFW.KEY_LEFT_SHIFT || key === GLFW.KEY_RIGHT_SHIFT
@@ -92,7 +90,7 @@ create_window(title::String) = create_window(default_windowsize()..., title)
 
 function glfw_lookup_key(x::Integer)
     for key in instances(Key)
-        Int(key) === x && return key
+        Int(key) == x && return key
     end
     error("Key with unicode value $x not found")
 end
@@ -134,7 +132,7 @@ function describe(xs::Union{Key,MouseButton,Mod}...)
     ms = sort!([describe(x) for x in xs if x isa Mod])
     ks = sort!([describe(x) for x in xs if x isa Key])
     bs = sort!([describe(x) for x in xs if x isa MouseButton])
-    join(vcat(ms, ks, bs), "+")
+    return join(vcat(ms, ks, bs), "+")
 end
 
 @inline isalt(key::Key) = key === GLFW.KEY_LEFT_ALT || key === GLFW.KEY_RIGHT_ALT
@@ -234,7 +232,7 @@ end
     button === GLFW.MOUSE_BUTTON_LEFT && return s.left
     button === GLFW.MOUSE_BUTTON_MIDDLE && return s.middle
     button === GLFW.MOUSE_BUTTON_RIGHT && return s.right
-    GLFW.GetMouseButton(s.window, button)
+    return GLFW.GetMouseButton(s.window, button)
 end
 
 @inline function modbits(s::WindowState)
@@ -243,7 +241,7 @@ end
     s.shift && (m |= Integer(MOD_SHIFT))
     s.control && (m |= Integer(MOD_CONTROL))
     s.super && (m |= Integer(MOD_SUPER))
-    m
+    return m
 end
 
 @inline nomod(s::WindowState) = iszero(modbits(s))
@@ -317,13 +315,13 @@ function trigger!(mngr::WindowManager, e::Event)
         error("Unknown event $e")
     end
 
-    mngr
+    return mngr
 end
 
 function keycb!(mngr::WindowManager, key::Key, ::Cint, action::Action, mods::Cint)
     s = mngr.state
-
     status = ispress(action) || isrepeat(action)
+
     if isalt(key)
         s.alt = status
     elseif isshift(key)
@@ -358,7 +356,7 @@ function cursorposcb!(mngr::WindowManager, x, y)
 
     trigger!(mngr, MouseMoveEvent(dx, dy, isdrag, t))
 
-    nothing
+    return
 end
 
 function mousebuttoncb!(
@@ -389,10 +387,7 @@ function mousebuttoncb!(
     ev = ButtonEvent(button, action, isdoubleclick, t)
     trigger!(mngr, ev)
     s.lastbuttonevent = ev
-
-    if ispress(action)
-        s.lastbuttonpress = ev
-    end
+    ispress(action) && (s.lastbuttonpress = ev)
 
     return
 end
@@ -401,8 +396,7 @@ function scrollcb!(mngr::WindowManager, dx, dy)
     mngr.state.sx += dx
     mngr.state.sy += dy
     trigger!(mngr, ScrollEvent(dx, dy, time()))
-
-    nothing
+    return
 end
 
 function windowsizecb!(mngr::WindowManager, width, height)
@@ -412,8 +406,7 @@ function windowsizecb!(mngr::WindowManager, width, height)
     s.width = width
     s.height = height
     trigger!(mngr, WindowResizeEvent(dx, dy, time()))
-
-    nothing
+    return
 end
 
 ####
@@ -440,10 +433,7 @@ end
 
 eventtype(::EventHandler{E}) where {E} = E
 
-function (h::EventHandler)(x::ObsEntry)
-    h.callback(x.state, x.event)
-    nothing
-end
+(h::EventHandler)(x::ObsEntry) = h.callback(x.state, x.event)
 
 function register!(mngr::WindowManager, hs::EventHandler...)
     for obs in events(mngr.events), h in hs
@@ -465,12 +455,12 @@ end
 
 
 function onevent(cb, E::Type{<:Event}; what = nothing, when = nothing)
-    EventHandler{E}(cb, what, when)
+    return EventHandler{E}(cb, what, when)
 end
 
 
 function onkey(cb, key::Key; what = nothing)
-    let cb = cb
+    return let cb = cb
         EventHandler{KeyEvent}(what, describe(key)) do s, e
             e.key === key && iszero(modbits(s)) && cb(s, e)
         end
@@ -479,9 +469,26 @@ end
 
 function onkey(cb, key::Key, mods::Mod...; what = nothing)
     when = describe(key, mods...)
-    let cb = cb, mods = modbits(mods)
+    return let cb = cb, mods = modbits(mods)
         EventHandler{KeyEvent}(what, when) do s, e
             e.key === key && modbits(s) === mods && cb(s, e)
+        end
+    end
+end
+
+function onscroll(cb; what = nothing)
+    return let cb = cb
+        EventHandler{ScrollEvent}(what, "Scroll") do s, e
+            iszero(modbits(s)) && cb(s, e)
+        end
+    end
+end
+
+function onscroll(cb, mods::Mod...; what = nothing)
+    when = "$(describe(mods...)) + Scroll"
+    return let cb = cb, mods = modbits(mods)
+        EventHandler{ScrollEvent}(what, when) do s, e
+            modbits(s) === mods && cb(s, e)
         end
     end
 end
@@ -517,20 +524,3 @@ end
 #    end
 #end
 
-
-function onscroll(cb; what = nothing)
-    let cb = cb
-        EventHandler{ScrollEvent}(what, "Scroll") do s, e
-            iszero(modbits(s)) && cb(s, e)
-        end
-    end
-end
-
-function onscroll(cb, mods::Mod...; what = nothing)
-    when = "$(describe(mods...)) + Scroll"
-    let cb = cb, mods = modbits(mods)
-        EventHandler{ScrollEvent}(what, when) do s, e
-            modbits(s) === mods && cb(s, e)
-        end
-    end
-end

@@ -2,8 +2,11 @@ module LyceumMuJoCoViz
 
 using Base: RefValue, @lock, @lock_nofail
 
-import GLFW
-using GLFW: Window, Key, Action, MouseButton, GetKey, RELEASE, PRESS, REPEAT
+# Stdlib
+using Printf: @printf
+
+# 3rd party
+using GLFW: GLFW, Window, Key, Action, MouseButton, GetKey, RELEASE, PRESS, REPEAT
 using PrettyTables: pretty_table
 using BangBang: @set!!
 using StaticArrays: SVector, MVector
@@ -23,8 +26,7 @@ export visualize
 
 const FONTSCALE = MJCore.FONTSCALE_150 # can be 100, 150, 200
 const MAXGEOM = 10000 # preallocated geom array in mjvScene
-const MIN_REFRESHRATE = 30 # minimum effective refreshrate
-const RENDERGAMMA = 0.9
+const MIN_REFRESHRATE = 30 # minimum rate when sim cannot run at the native refresh rate
 const SIMGAMMA = 0.99
 const RNDGAMMA = 0.9
 const VIDFPS = 40
@@ -110,14 +112,7 @@ function run(e::Engine)
     GLFW.ShowWindow(e.mngr.state.window)
 
     # run the simulation/mode in second thread
-    modetask = Threads.@spawn runmode!(e)
-
-    print(ASCII)
-    println()
-    printhelp(e)
-
-    runrender(e)
-    wait(modetask)
+    modetask = Threads.@spawn runphysics(e)
 
     println(ASCII)
     println("Press \"F1\" to show the help message.")
@@ -128,8 +123,9 @@ function run(e::Engine)
 end
 
 
-function runrender(e::Engine)
+function runui(e::Engine)
     shouldexit = false
+    trecord = 0.0
     try
         while !shouldexit
             @lock e.phys.lock begin
@@ -157,29 +153,11 @@ function runrender(e::Engine)
         end
     finally
         @lock e.ui.lock begin
-            e.ui.shouldexit = shouldexit = true
+            e.ui.shouldexit = true
         end
         GLFW.DestroyWindow(e.mngr.state.window)
     end
-
-    nothing
-end
-
-function render!(e::Engine)
-    w, h = GLFW.GetFramebufferSize(e.mngr.state.window)
-    rect = mjrRect(Cint(0), Cint(0), Cint(w), Cint(h))
-    smallrect = mjrRect(Cint(0), Cint(0), Cint(w), Cint(h))
-
-    mjr_render(rect, e.ui.scn, e.ui.con)
-
-    e.ui.showinfo && showinfo!(rect, e)
-
-    # should happen last to include all overlays
-    !isnothing(e.ffmpeghandle) && recordframe!(e, rect)
-
-    GLFW.SwapBuffers(e.mngr.state.window)
-
-    e
+    return
 end
 
 function prepare!(e::Engine)
@@ -220,8 +198,6 @@ function runphysics(e::Engine)
     p = e.phys
     ui = e.ui
     minrefreshrate = min(MIN_REFRESHRATE, GetRefreshRate())
-    maxrender_seconds = 1/minrefreshrate
-
     resettime!(p) # reset sim and world clocks to 0
 
     try
@@ -232,9 +208,7 @@ function runphysics(e::Engine)
 
             if shouldexit
                 break
-            elseif (time() - lastrender) > maxrender_seconds
-                # If current refresh rate less than minimum, then yield to give
-                # render thread a chance to acquire lock
+            elseif (time() - lastrender) > 1 / minrefreshrate
                 yield()
                 continue
             else

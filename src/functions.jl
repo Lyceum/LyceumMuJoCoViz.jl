@@ -23,9 +23,6 @@ end
 @inline mode(e::Engine, idx::Integer = e.curmodeidx) = e.modes[idx]
 
 function switchmode!(e::Engine, idx::Integer)
-    io = e.ui.miscbuf
-    seekstart(io)
-
     teardown!(e.ui, e.phys, mode(e))
     deregister!(e.mngr, e.modehandlers...)
 
@@ -34,11 +31,12 @@ function switchmode!(e::Engine, idx::Integer)
     setup!(e.ui, e.phys, mode(e))
     register!(e.mngr, e.modehandlers...)
 
-    e
+    return e
 end
 
+
 function printhelp(e::Engine)
-    io = e.ui.miscbuf
+    io = e.ui.io1
 
     writedescription(io, e.handlers)
     handlerdescription = String(take!(io))
@@ -55,7 +53,7 @@ function printhelp(e::Engine)
     println()
     println()
 
-    nothing
+    return
 end
 
 function writedescription(io, hs::Vector{EventHandler})
@@ -75,17 +73,18 @@ function writedescription(io, hs::Vector{EventHandler})
         header = ["Command", "Description"]
         _, ncols = get_terminalsize()
         w1max = max(maximum(length, whens), length(first(header)))
+        w2max = max(maximum(length, whats), length(first(header)))
+
         w1 = min(w1max, div(ncols, 2))
-        w2 = ncols - w1 - 4 * length(header) # each column is padded by 4 spaces
+        w2 = min(w2max, ncols - w1 - 4 * length(header)) # each column is padded by 4 spaces
         pretty_table(io, hcat(whens, whats), ["Command", "Description"], alignment = :L, linebreaks = true, autowrap = true, columns_width = [w1, w2])
     end
 
-    io
+    return
 end
 
 
-function showinfo!(rect::MJCore.mjrRect, e::Engine)
-    io = e.ui.miscbuf
+function overlay_info(rect::MJCore.mjrRect, e::Engine)
     ui = e.ui
     io1 = ui.io1
     io2 = ui.io2
@@ -127,9 +126,29 @@ function showinfo!(rect::MJCore.mjrRect, e::Engine)
     println(io1, "Frame")
     println(io2, MJCore.mjFRAMESTRING[e.ui.vopt[].frame+1])
 
-    println(io, "Engine Mode: $(nameof(mode(e))).")
-    modeinfo(io, ui, phys, mode(e))
-    infostr = chomp(String(take!(io)))
+    println(io1, "Label")
+    println(io2, MJCore.mjLABELSTRING[e.ui.vopt[].label+1])
+
+    # env specific info
+    if phys.model isa AbstractMuJoCoEnvironment
+        name = string(Base.nameof(typeof(phys.model)))
+        println(io1, "Env")
+        println(io2, name)
+
+        println(io1, "Reward")
+        @printf io2 "%.5g\n" ui.reward
+
+        println(io1, "Eval")
+        @printf io2 "%.5g\n" ui.eval
+    end
+
+    # mode specific info
+    println(io1, "Mode Info")
+    println(io2)
+    modeinfo(io1, io2, ui, phys, mode(e))
+
+    info1 = string(chomp(String(take!(io1))))
+    info2 = string(chomp(String(take!(io2))))
 
     mjr_overlay(
         MJCore.FONT_NORMAL,
@@ -140,27 +159,32 @@ function showinfo!(rect::MJCore.mjrRect, e::Engine)
         ui.con,
     )
 
+    return
+end
+
 
 function startrecord!(e::Engine)
     window = e.mngr.state.window
     SetWindowAttrib(window, GLFW.RESIZABLE, 0)
     w, h = GLFW.GetFramebufferSize(window)
     resize!(e.framebuf, 3 * w * h)
-    e.ffmpeghandle, dst = startffmpeg(w, h, GetRefreshRate())
+    e.ffmpeghandle, dst = startffmpeg(w, h)
     @info "Saving video to $dst. Window resizing temporarily disabled"
-    e
+    return e
 end
 
-function recordframe!(e::Engine, rect)
+function recordframe(e::Engine)
+    w, h = GLFW.GetFramebufferSize(e.mngr.state.window)
+    rect = mjrRect(Cint(0), Cint(0), Cint(w), Cint(h))
     mjr_readPixels(e.framebuf, C_NULL, rect, e.ui.con)
     write(e.ffmpeghandle, e.framebuf)
-    e
+    return nothing
 end
 
 function stoprecord!(e::Engine)
     close(e.ffmpeghandle)
     SetWindowAttrib(e.mngr.state.window, GLFW.RESIZABLE, 1)
     e.ffmpeghandle = nothing
-    @info "Finished! Window resizing re-enabled."
-    e
+    @info "Finished recording! Window resizing re-enabled."
+    return e
 end
