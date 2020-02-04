@@ -1,296 +1,319 @@
 const STEPSPERKEY = 1
 const SHIFTSTEPSPERKEY = 50
 
-function move_pert_or_cam(
-    ui::UIState,
-    phys::PhysicsState,
-    state::WindowState,
-    event::MouseDrag,
-)
-    sim = getsim(phys.model)
-    scaled_dx, scaled_dy = event.dx / state.width, event.dy / state.height
 
-    if state.right
-        action = state.shift ? MJCore.mjMOUSE_MOVE_H : MJCore.mjMOUSE_MOVE_V
-    elseif state.left
-        action = state.shift ? MJCore.mjMOUSE_ROTATE_H : MJCore.mjMOUSE_ROTATE_V
-    else
-        action = MJCore.mjMOUSE_ZOOM
-    end
+function default_mousemovecb(e::Engine, s::WindowState, ev::MouseMoveEvent)
+    p = e.phys
+    sim = getsim(p.model)
+    ui = e.ui
 
-    if iszero(phys.pert[].active)
-        mjv_moveCamera(sim.m, action, scaled_dx, scaled_dy, ui.scn, ui.cam)
-    else
-        mjv_movePerturb(sim.m, sim.d, action, scaled_dx, scaled_dy, ui.scn, phys.pert)
-    end
-end
+    if ev.isdrag
+        # Move free camera
 
-function default_mousecb(e::Engine, s::WindowState, event::Doubleclick)
-    if isleft(event.button)
-        selmode = 1
-    elseif (ismiddle(event.button) || isright(event.button)) && s.control
-        selmode = 3
-    elseif isright(event.button)
-        selmode = 2
-    end
+        scaled_dx = ev.dx / s.width
+        scaled_dy = ev.dy / s.height
 
-    # get current window size & cursor pos
-    width, height = s.width, s.height
-    x, y = s.x, s.y
-    sim = getsim(e.phys.model)
-
-    # find geom and 3D click point, get corresponding body
-    selpnt = zeros(MVector{3,Float64})
-    selgeom, selskin = Ref(Cint(0)), Ref(Cint(0))
-    selbody = mjv_select(
-        sim.m,
-        sim.d,
-        e.ui.vopt,
-        width / height,
-        x / width,
-        (height - y) / height,
-        e.ui.scn,
-        selpnt,
-        selgeom,
-        selskin,
-    )
-
-    # stop perturbation on select
-    e.phys.pert[].active = 0
-
-    # set lookat point, start tracking is requested
-    if selmode == 2 || selmode == 3
-        # copy selpnt if anything clicked
-        selbody >= 0 && (e.ui.cam[].lookat = selpnt)
-
-        # switch to tracking camera
-        if selmode == 3 && selbody >= 0
-            e.ui.cam[].type = Int(MJCore.mjCAMERA_TRACKING)
-            e.ui.cam[].trackbodyid = selbody
-            e.ui.cam[].fixedcamid = -1
-        end
-    else # set body selection
-        if selbody >= 0
-            # compute localpos
-            tmp = selpnt - sim.d.xpos[:, selbody+1]
-            res = reshape(sim.d.xmat[:, selbody+1], 3, 3)' * tmp
-            e.phys.pert[].localpos = SVector{3}(res)
-
-            # record selection
-            e.phys.pert[].select = selbody
-            e.phys.pert[].skinselect = selskin[]
+        if s.right
+            action = s.shift ? MJCore.mjMOUSE_MOVE_H : MJCore.mjMOUSE_MOVE_V
+        elseif s.left
+            action = s.shift ? MJCore.mjMOUSE_ROTATE_H : MJCore.mjMOUSE_ROTATE_V
         else
-            e.phys.pert[].select = 0
-            e.phys.pert[].skinselect = -1
+            action = MJCore.mjMOUSE_ZOOM
+        end
+
+        if iszero(p.pert[].active)
+            mjv_moveCamera(sim.m, action, scaled_dx, scaled_dy, ui.scn, ui.cam)
+        else
+            mjv_movePerturb(sim.m, sim.d, action, scaled_dx, scaled_dy, ui.scn, p.pert)
         end
     end
+
+    return
 end
 
-function backstep_event(e)
-    l1 = onkeypress(GLFW.KEY_LEFT) do state, event
-        e.ui.paused && for _ = 1:STEPSPERKEY
-            reversestep!(e.phys, mode(e))
+function default_buttoncb(e::Engine, s::WindowState, ev::ButtonEvent)
+    p = e.phys
+    pert = p.pert
+    sim = getsim(p.model)
+    ui = e.ui
+
+    if isright(ev.button) || isleft(ev.button)
+        # set/unset pertubation on previously selected body
+        if ispress(ev.action) && s.control && pert[].select > 0
+            newpert = s.right ? Int(MJCore.mjPERT_TRANSLATE) : Int(MJCore.mjPERT_ROTATE)
+            # perturbation onset: reset reference
+            iszero(pert[].active) && mjv_initPerturb(sim.m, sim.d, ui.scn, pert)
+            pert[].active = newpert
+        elseif isrelease(ev.action)
+            # stop pertubation
+            pert[].active = 0
         end
     end
-    l2 = onevent(KeyRepeat, (s, e) -> e.key == GLFW.KEY_LEFT) do state, event
-        e.ui.paused && for _ = 1:STEPSPERKEY
-            reversestep!(e.phys, mode(e))
+
+    if ev.isdoubleclick
+        # new select: find geom and 3D click point, get corresponding body
+
+        # stop perturbation on new select
+        pert[].active = 0
+
+        # find the selected body
+        selpnt = zeros(MVector{3,Float64})
+        selgeom, selskin = Ref(Cint(0)), Ref(Cint(0))
+        selbody = mjv_select(
+            sim.m,
+            sim.d,
+            ui.vopt,
+            s.width / s.height,
+            s.x / s.width,
+            (s.height - s.y) / s.height,
+            ui.scn,
+            selpnt,
+            selgeom,
+            selskin,
+        )
+
+        if isleft(ev.button) && nomod(s)
+            if selbody >= 0
+                # set body selection (including world body)
+
+                # compute localpos
+                tmp = selpnt - sim.d.xpos[:, selbody+1] # TODO
+                res = reshape(sim.d.xmat[:, selbody+1], 3, 3)' * tmp
+                pert[].localpos = SVector{3}(res)
+
+                # record selection
+                pert[].select = selbody
+                pert[].skinselect = selskin[]
+            else
+                # no body selected, unset selection
+                pert[].select = 0
+                pert[].skinselect = -1
+            end
+        elseif isright(ev.button)
+            # set camera to look at selected body (including world body)
+            selbody >= 0 && (ui.cam[].lookat = selpnt)
+
+            if s.control && selbody > 0
+                # also set camera to track selected body (excluding world body)
+                ui.cam[].type = Int(MJCore.mjCAMERA_TRACKING)
+                ui.cam[].trackbodyid = selbody
+                ui.cam[].fixedcamid = -1
+            end
         end
     end
-    l3 = onkeypress(GLFW.KEY_LEFT, MOD_SHIFT) do state, event
-        e.ui.paused && for _ = 1:SHIFTSTEPSPERKEY
-            reversestep!(e.phys, mode(e))
-        end
-    end
-    l4 = onevent(KeyRepeat, (s, e) -> e.key == GLFW.KEY_LEFT && s.shift) do state, event
-        e.ui.paused && for _ = 1:SHIFTSTEPSPERKEY
-            reversestep!(e.phys, mode(e))
-        end
-    end
-    MultiEventHandler(
-        [l1, l2, l3, l4],
-        "KEY_LEFT  Step back when paused (hold SHIFT for $(SHIFTSTEPSPERKEY) steps)",
-    )
+
+    return
 end
 
-function forwardstep_event(e)
-    r1 = onkeypress(GLFW.KEY_RIGHT) do state, event
-        e.ui.paused && for _ = 1:STEPSPERKEY
-            forwardstep!(e.phys, mode(e))
-        end
-    end
-    r2 = onevent(KeyRepeat, (s, e) -> e.key == GLFW.KEY_RIGHT) do state, event
-        e.ui.paused && for _ = 1:STEPSPERKEY
-            forwardstep!(e.phys, mode(e))
-        end
-    end
-    r3 = onkeypress(GLFW.KEY_RIGHT, MOD_SHIFT) do state, event
-        e.ui.paused && for _ = 1:SHIFTSTEPSPERKEY
-            forwardstep!(e.phys, mode(e))
-        end
-    end
-    r4 = onevent(KeyRepeat, (s, e) -> e.key == GLFW.KEY_RIGHT && s.shift) do state, event
-        e.ui.paused && for _ = 1:SHIFTSTEPSPERKEY
-            forwardstep!(e.phys, mode(e))
-        end
-    end
-    MultiEventHandler(
-        [r1, r2, r3, r4],
-        "KEY_RIGHT  Step forward when paused (hold SHIFT for $(SHIFTSTEPSPERKEY) steps)",
-    )
+function default_scrollcb(e::Engine, s::WindowState, ev::ScrollEvent)
+    m = getsim(e.phys.model).m
+    mjv_moveCamera(m, MJCore.mjMOUSE_ZOOM, 0.0, 0.05 * ev.dy, e.ui.scn, e.ui.cam)
+    return
 end
-
-
 
 function handlers(e::Engine)
-    let e = e,
-        sim = getsim(e.phys.model),
-        pert = e.phys.pert,
-        ui = e.ui,
-        phys = e.phys
-
-        return [
-            onkeypress(GLFW.KEY_F1, desc = "Toggle help") do state, event
-                ui.showhelp = !ui.showhelp
-            end,
-            onkeypress(GLFW.KEY_F2, desc = "Toggle simulation info") do state, event
-                ui.showinfo = !ui.showinfo
-            end,
-            onkeypress(GLFW.KEY_F11, desc = "Toggle fullscreen") do state, event
-                ismax = GLFW.GetWindowAttrib(state.window, GLFW.MAXIMIZED)
-                iszero(ismax) ? GLFW.MaximizeWindow(state.window) :
-                GLFW.RestoreWindow(state.window)
-            end,
-            onkeypress(GLFW.KEY_BACKSPACE, desc = "Reset model") do _, _
-                reset!(phys, mode(e))
-            end,
-            onkeypress(GLFW.KEY_R, desc = "Toggle reverse") do state, event
-                ui.reversed = !ui.reversed
-                phys.timer.rate *= -1
-                resettime!(phys)
-            end,
-            onkeypress(GLFW.KEY_ENTER, desc = "Toggle speed mode") do state, event
-                if ui.speedmode
-                    ui.speedmode = false
-                    setrate!(phys.timer, 1)
-                else
-                    ui.speedmode = true
-                    setrate!(phys.timer, ui.speedfactor)
-                end
-            end,
-            onkeypress(GLFW.KEY_ESCAPE, desc = "Quit") do _, _
-                ui.shouldexit = true
+    return let e = e, ui = e.ui, p = e.phys
+        [
+            onevent(ButtonEvent) do s, ev
+                default_buttoncb(e, s, ev)
             end,
 
-            onkeypress(
-                GLFW.KEY_A,
-                MOD_CONTROL,
-                desc = "Align camera scale",
-            ) do state, event
-                alignscale!(ui, sim)
+            onevent(MouseMoveEvent) do s, ev
+                default_mousemovecb(e, s, ev)
             end,
 
-            forwardstep_event(e),
-            backstep_event(e),
 
-            onkeypress(GLFW.KEY_SEMICOLON, desc = "Cycle frame mode backwards") do _, _
-                ui.vopt[].frame = dec(ui.vopt[].frame, 0, Integer(MJCore.mjNFRAME) - 1)
-            end,
-            onkeypress(GLFW.KEY_APOSTROPHE, desc = "Cycle frame mode forward") do _, _
-                ui.vopt[].frame = inc(ui.vopt[].frame, 0, Integer(MJCore.mjNFRAME) - 1)
+            onkey(GLFW.KEY_F1, what = "Show help message") do s, ev
+                ispress_or_repeat(ev.action) && printhelp(e)
             end,
 
-            onkeypress(GLFW.KEY_PERIOD, desc = "Cycle label mode backwards") do _, _
-                ui.vopt[].label = dec(ui.vopt[].label, 0, Integer(MJCore.mjNLABEL) - 1)
-            end,
-            onkeypress(GLFW.KEY_SLASH, desc = "Cycle label mode forward") do _, _
-                ui.vopt[].label = inc(ui.vopt[].label, 0, Integer(MJCore.mjNLABEL) - 1)
+            onkey(GLFW.KEY_F2, what = "Toggle simulation info") do s, ev
+                ispress_or_repeat(ev.action) && (ui.showinfo = !ui.showinfo)
             end,
 
-            onkeypress(
-                GLFW.KEY_PAGE_UP,
-                desc = "Cycle engine mode forward",
-            ) do state, event
-                switchmode!(e, inc(e.curmodeidx, 1, length(e.modes)))
-            end,
-            onkeypress(
-                GLFW.KEY_PAGE_DOWN,
-                desc = "Cycle engine mode backwards",
-            ) do state, event
-                switchmode!(e, dec(e.curmodeidx, 1, length(e.modes)))
-            end,
-
-            onkeypress(GLFW.KEY_SPACE, desc = "Pause") do state, event
-                if ui.paused
-                    start!(phys.timer)
-                    ui.paused = false
-                else
-                    stop!(phys.timer)
-                    ui.paused = true
+            onkey(GLFW.KEY_F11, what = "Toggle fullscreen") do s, ev
+                if ispress_or_repeat(ev.action)
+                    ismin = iszero(GLFW.GetWindowAttrib(s.window, GLFW.MAXIMIZED))
+                    ismin ? GLFW.MaximizeWindow(s.window) : GLFW.RestoreWindow(s.window)
                 end
             end,
 
-            onkeypress(GLFW.KEY_V, desc = "Toggle video recording") do state, event
-                isnothing(e.ffmpeghandle) ? startrecord!(e) : finishrecord!(e)
+            onkey(GLFW.KEY_ESCAPE, what = "Quit") do s, ev
+                ispress_or_repeat(ev.action) && (ui.shouldexit = true)
+            end,
+
+            onscroll(what = "Zoom camera") do s, ev
+                default_scrollcb(e, s, ev)
+            end,
+
+            onkey(GLFW.KEY_A, MOD_CONTROL, what = "Align camera scale") do s, ev
+                ispress_or_repeat(ev.action) && alignscale!(ui, getsim(p.model))
+            end,
+
+            onkey(GLFW.KEY_V, what = "Toggle video recording") do s, ev
+                if ispress(ev.action)
+                    e.ffmpeghandle === nothing ? startrecord!(e) : stoprecord!(e)
+                end
+            end,
+
+            onkey(GLFW.KEY_BACKSPACE, what = "Reset model") do s, ev
+                ispress_or_repeat(ev.action) && reset!(p, mode(e))
+            end,
+
+            onkey(GLFW.KEY_R, what = "Toggle reverse") do s, ev
+                if ispress_or_repeat(ev.action)
+                    ui.reversed = !ui.reversed
+                    p.timer.rate *= -1
+                    resettime!(p)
+                end
+            end,
+
+
+            onkey(GLFW.KEY_SPACE, what = "Pause") do s, ev
+                if ispress_or_repeat(ev.action)
+                    ui.paused ? start!(p.timer) : stop!(p.timer)
+                    ui.paused = !ui.paused
+                end
             end,
 
             onevent(
-                ButtonPress,
-                (s, e) -> !ismiddle(e.button) && s.control && pert[].select > 0,
-            ) do state, event
-                newperturb = state.right ? Int(MJCore.mjPERT_TRANSLATE) :
-                             Int(MJCore.mjPERT_ROTATE)
-                # perturbation onset: reset reference
-                iszero(pert[].active) && mjv_initPerturb(sim.m, sim.d, ui.scn, pert)
-                pert[].active = newperturb
+                KeyEvent,
+                when = describe(GLFW.KEY_RIGHT),
+                what = "Step forward when paused (hold SHIFT for $(SHIFTSTEPSPERKEY) steps)"
+            ) do s, ev
+                if ui.paused && ev.key === GLFW.KEY_RIGHT && ispress_or_repeat(ev.action)
+                    steps = s.shift ? 50 : 1
+                    for _ = 1:steps
+                        forwardstep!(p, mode(e))
+                    end
+                end
             end,
 
             onevent(
-                ButtonRelease,
-                (s, e) -> isright(e.button) || isleft(e.button),
-            ) do state, event
-                pert[].active = 0
+                KeyEvent,
+                when = describe(GLFW.KEY_LEFT),
+                what = "Step backwards when paused (hold SHIFT for $(SHIFTSTEPSPERKEY) steps)"
+            ) do s, ev
+                if ui.paused && ev.key === GLFW.KEY_LEFT && ispress_or_repeat(ev.action)
+                    steps = s.shift ? 50 : 1
+                    for _ = 1:steps
+                        reversestep!(p, mode(e))
+                    end
+                end
             end,
 
-            onscroll(desc = "Zoom camera") do state, event
-                mjv_moveCamera(
-                    sim.m,
-                    MJCore.mjMOUSE_ZOOM,
-                    0.0,
-                    0.05 * event.dy,
-                    ui.scn,
-                    ui.cam,
-                )
+
+            onkey(GLFW.KEY_ENTER, what = "Toggle speed mode") do s, ev
+                if ispress_or_repeat(ev.action)
+                    ui.speedmode = !ui.speedmode
+                    setrate!(p.timer, ui.speedmode ? ui.speedfactor : 1)
+                end
             end,
 
-            onkeypress(
-                GLFW.KEY_UP,
-                MOD_SHIFT,
-                desc = "Increase sim rate in speedmode",
-            ) do state, event
-                if ui.speedmode
+            onkey(GLFW.KEY_UP, MOD_SHIFT, what = "Increase sim rate in speedmode") do s, ev
+                if ispress_or_repeat(ev.action)
                     ui.speedfactor *= 2
-                    setrate!(phys.timer, ui.speedfactor)
-                else
-                    setrate!(phys.timer, 1)
-                end
-            end,
-            onkeypress(
-                GLFW.KEY_DOWN,
-                MOD_SHIFT,
-                desc = "Decrease sim rate in speedmode",
-            ) do state, event
-                if ui.speedmode
-                    ui.speedfactor /= 2
-                    setrate!(phys.timer, ui.speedfactor)
-                else
-                    setrate!(phys.timer, 1)
+                    setrate!(p.timer, ui.speedfactor)
                 end
             end,
 
-            onevent(MouseDrag) do state, event
-                move_pert_or_cam(ui, phys, state, event)
+            onkey(GLFW.KEY_DOWN, MOD_SHIFT, what = "Decrease sim rate in speedmode") do s, ev
+                if ispress_or_repeat(ev.action)
+                    ui.speedfactor /= 2
+                    setrate!(p.timer, ui.speedfactor)
+                end
             end,
+
+
+            onkey(GLFW.KEY_PAGE_UP, what = "Cycle engine mode forward") do s, ev
+                if ispress_or_repeat(ev.action)
+                    switchmode!(e, inc(e.curmodeidx, 1, length(e.modes)))
+                end
+            end,
+
+            onkey(GLFW.KEY_PAGE_DOWN, what = "Cycle engine mode backwards") do s, ev
+                if ispress_or_repeat(ev.action)
+                    switchmode!(e, dec(e.curmodeidx, 1, length(e.modes)))
+                end
+            end,
+
+
+            onkey(GLFW.KEY_MINUS, what = "Cycle label mode backwards") do s, ev
+                if ispress_or_repeat(ev.action)
+                    ui.vopt[].label = dec(ui.vopt[].label, 0, Int(MJCore.mjNLABEL) - 1)
+                end
+            end,
+
+            onkey(GLFW.KEY_EQUAL, what = "Cycle label mode forward") do s, ev
+                if ispress_or_repeat(ev.action)
+                    ui.vopt[].label = inc(ui.vopt[].label, 0, Int(MJCore.mjNLABEL) - 1)
+                end
+            end,
+
+
+            onkey(GLFW.KEY_LEFT_BRACKET, what = "Cycle frame mode backwards") do s, ev
+                if ispress_or_repeat(ev.action)
+                    ui.vopt[].frame = dec(ui.vopt[].frame, 0, Int(MJCore.mjNFRAME) - 1)
+                end
+            end,
+
+            onkey(GLFW.KEY_RIGHT_BRACKET, what = "Cycle frame mode forward") do s, ev
+                if ispress_or_repeat(ev.action)
+                    ui.vopt[].frame = inc(ui.vopt[].frame, 0, Int(MJCore.mjNFRAME) - 1)
+                end
+            end,
+
+
+            gen_mjflag_handlers(ui)...
         ]
     end
+end
+
+function gen_mjflag_handlers(ui::UIState)
+    handlers = EventHandler[]
+    let vopt = ui.vopt, scn = ui.scn
+        for i=1:Int(MJCore.mjNVISFLAG)
+            key = glfw_lookup_key(MJCore.mjVISSTRING[3, i])
+            name = MJCore.mjVISSTRING[1, i]
+            h = onkey(key, MOD_SHIFT, what = "Toggle $name Viz Flag") do s, ev
+                ispress_or_repeat(ev.action) && (vopt[].flags = _toggle(vopt[].flags, i))
+            end
+            push!(handlers, h)
+        end
+
+        for i=1:Int(MJCore.mjNRNDFLAG)
+            key = glfw_lookup_key(MJCore.mjRNDSTRING[3, i])
+            name = MJCore.mjRNDSTRING[1, i]
+            h = onkey(key, MOD_SHIFT, what = "Toggle $name Render Flag") do s, ev
+                ispress_or_repeat(ev.action) && (scn[].flags = _toggle(scn[].flags, i))
+            end
+            push!(handlers, h)
+        end
+
+
+        n = MJCore.mjNGROUP
+
+        h = onevent(KeyEvent, when = "[1-$n]", what = "Toggle Group Groups 1-$n") do s, ev
+            i = Int(ev.key) - Int('0')
+            if ispress_or_repeat(ev.action) && iszero(modbits(s)) && checkbounds(Bool, vopt[].geomgroup, i)
+                vopt[].geomgroup = _toggle(vopt[].geomgroup, i)
+            end
+        end
+        push!(handlers, h)
+
+        h = onevent(KeyEvent, when = "SHIFT+[1-$n]", what = "Toggle Site Groups 1-$n") do s, ev
+            i = Int(ev.key) - Int('0')
+            if ispress_or_repeat(ev.action) && isshift(modbits(s)) && checkbounds(Bool, vopt[].sitegroup, i)
+                vopt[].sitegroup = _toggle(vopt[].sitegroup, i)
+            end
+        end
+        push!(handlers, h)
+    end
+    return handlers
+end
+
+@inline function _toggle(A::SVector{N,MJCore.mjtByte}, i::Integer) where {N}
+    A = MVector(A)
+    A[i] = ifelse(A[i] > 0, 0, 1)
+    SVector(A)
 end

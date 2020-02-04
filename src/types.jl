@@ -21,7 +21,6 @@ Base.@kwdef mutable struct UIState
     con::RefValue{mjrContext} = Ref(mjrContext())
     figsensor::RefValue{mjvFigure} = Ref(mjvFigure())
 
-    showhelp::Bool = true
     showinfo::Bool = true
     showsensor::Bool = false
     speedmode::Bool = false
@@ -37,27 +36,24 @@ Base.@kwdef mutable struct UIState
     lastrender::Float64 = 0
     refreshrate::Float64 = 0
     realtimerate::Float64 = 0
-    msgbuf::IOBuffer = IOBuffer()
-    miscbuf::IOBuffer = IOBuffer()
+    io1::IOBuffer = IOBuffer()
+    io2::IOBuffer = IOBuffer()
 
     lock::ReentrantLock = ReentrantLock()
 end
 
-mutable struct Engine{T,M<:Tuple}
+mutable struct Engine{T,M}
     phys::PhysicsState{T}
     ui::UIState
     mngr::WindowManager
-
-    handlerdescription::String
+    handlers::Vector{EventHandler}
 
     modes::M
-    modehandlers::Vector{AbstractEventHandler}
-    modehandlerdescription::String
+    modehandlers::Vector{EventHandler}
     curmodeidx::Int
 
     ffmpeghandle::Maybe{Base.Process}
-    ffmpegdst::Maybe{String}
-    vidframe::Vector{UInt8}
+    framebuf::Vector{UInt8}
 
     function Engine(model::Union{MJSim,AbstractMuJoCoEnvironment}, modes::EngineMode...)
         window = create_window("LyceumMuJoCoViz")
@@ -73,46 +69,29 @@ mutable struct Engine{T,M<:Tuple}
             mjv_defaultFigure(ui.figsensor)
 
             sim = getsim(model)
-            mjv_makeScene(sim.m, ui.scn, MAXGEOM)
+            mjv_makeScene(sim.m, ui.scn, MAXGEOM) # TODO calculate MAXGEOM form model and moes
             mjr_makeContext(sim.m, ui.con, FONTSCALE)
 
             alignscale!(ui, sim)
             init_figsensor!(ui.figsensor)
 
-            io = IOBuffer()
-
-            curhandlers = handlers(ui, phys, modes[1])
-            if isnothing(curhandlers)
-                curhandlers = AbstractEventHandler[]
-                modehandlerdesc = ""
-            else
-                modehandlerdesc = String(take!(writedescription!(io, curhandlers)))
-            end
-
             e = new{typeof(model),typeof(modes)}(
                 phys,
                 ui,
                 mngr,
-
-                "",
+                EventHandler[],
 
                 modes,
-                curhandlers,
-                modehandlerdesc,
+                handlers(ui, phys, first(modes)),
                 1,
 
-                nothing,
                 nothing,
                 UInt8[],
             )
 
-            enginehandlers = handlers(e)
-            enginehandlers = convert(Vector{<:AbstractEventHandler}, enginehandlers)
-            writedescription!(io, enginehandlers)
-            e.handlerdescription = String(take!(io))
+            e.handlers = handlers(e)
+            register!(mngr, e.handlers...)
 
-            register!(mngr, enginehandlers)
-            on((o) -> default_mousecb(e, o.state, o.event), mngr.events.doubleclick)
             return e
         catch e
             GLFW.DestroyWindow(window)
