@@ -2,23 +2,20 @@ module LyceumMuJoCoViz
 
 using Base: RefValue, @lock, @lock_nofail
 
-# Stdlib
-using Printf: @printf
-
-# 3rd party
-using GLFW: GLFW, Window, Key, Action, MouseButton, GetKey, RELEASE, PRESS, REPEAT
-using PrettyTables: pretty_table
+import GLFW
+using GLFW: Window, Key, Action, MouseButton
 using BangBang: @set!!
 using StaticArrays: SVector, MVector
+using Printf: @printf
 using DocStringExtensions
 using Observables: AbstractObservable, Observable, on, off
-using FFMPEG: FFMPEG
-
-# Lyceum
-using MuJoCo, MuJoCo.MJCore
+import FFMPEG
+using MuJoCo
+using MuJoCo.MJCore
 using LyceumMuJoCo
 import LyceumMuJoCo: reset!
-using LyceumBase: LyceumBase, Maybe, AbsVec, AbsMat
+using LyceumBase
+using LyceumBase: Maybe, AbsVec, AbsMat
 
 
 export visualize
@@ -26,10 +23,9 @@ export visualize
 
 const FONTSCALE = MJCore.FONTSCALE_150 # can be 100, 150, 200
 const MAXGEOM = 10000 # preallocated geom array in mjvScene
-const MIN_REFRESHRATE = 30 # minimum rate when sim cannot run at the native refresh rate
+const MIN_REFRESHRATE = 20 # minimum effective refreshrate
+const RENDERGAMMA = 0.9
 const SIMGAMMA = 0.99
-const RNDGAMMA = 0.9
-const VIDFPS = 40
 
 
 include("util.jl")
@@ -41,14 +37,6 @@ include("modes.jl")
 include("defaulthandlers.jl")
 
 
-function __init__()
-    if Threads.nthreads() == 1
-        @warn "LyceumMuJoCoViz is designed to run multi-threaded, but the current Julia session was started with only one thread. Degraded performance will occur. To enable multi-threading, set JULIA_NUM_THREADS to a value greater than 1 before starting Julia."
-    end
-    return
-end
-
-
 """
     $(TYPEDSIGNATURES)
 
@@ -57,6 +45,8 @@ Starts an interactive visualization of `model`, which can be either a valid subt
 "modes" that allow you to visualize passive dynamics, play back recorded trajectories, and
 run a controller interactively. The passive dynamics mode depends only on `model` and is
 always available, while the other modes are specified by the keyword arguments below.
+
+For more information, see the on-screen help menu.
 
 # Keywords
 
@@ -94,7 +84,7 @@ function visualize(
     reset!(model)
     e = Engine(model, modes...)
     run(e)
-    return
+    nothing
 end
 
 
@@ -106,50 +96,39 @@ function run(e::Engine)
 
     # render first frame before opening window
     prepare!(e)
-    render(e)
+    render!(e)
     e.ui.refreshrate = GetRefreshRate()
     e.ui.lastrender = time()
     GLFW.ShowWindow(e.mngr.state.window)
 
     # run the simulation/mode in second thread
-    modetask = Threads.@spawn runphysics(e)
-
-    println(ASCII)
-    println("Press \"F1\" to show the help message.")
-
-    runui(e)
+    modetask = Threads.@spawn runmode!(e)
+    runrender(e)
     wait(modetask)
-    return
+
+    nothing
 end
 
 
-function runui(e::Engine)
-    shouldexit = false
-    trecord = 0.0
+function runrender(e::Engine)
     try
+        shouldexit = false
         while !shouldexit
             @lock e.phys.lock begin
                 GLFW.PollEvents()
                 prepare!(e)
             end
 
-            render(e)
+            yield()
+
+            render!(e)
             trender = time()
 
-            rt = 1 / (trender - e.ui.lastrender)
             @lock e.ui.lock begin
-                e.ui.refreshrate = RNDGAMMA * e.ui.refreshrate + (1 - RNDGAMMA) * rt
+                e.ui.refreshrate = RENDERGAMMA * e.ui.refreshrate + (1 - RENDERGAMMA) * (1 / (trender - e.ui.lastrender))
                 e.ui.lastrender = trender
                 shouldexit = e.ui.shouldexit |= GLFW.WindowShouldClose(e.mngr.state.window)
             end
-
-            tnow = time()
-            if e.ffmpeghandle !== nothing && tnow - trecord > 1 / VIDFPS
-                trecord = tnow
-                recordframe(e)
-            end
-
-            yield()
         end
     finally
         @lock e.ui.lock begin
@@ -157,58 +136,69 @@ function runui(e::Engine)
         end
         GLFW.DestroyWindow(e.mngr.state.window)
     end
-    return
+
+    nothing
+end
+
+function render!(e::Engine)
+    w, h = GLFW.GetFramebufferSize(e.mngr.state.window)
+    rect = mjrRect(Cint(0), Cint(0), Cint(w), Cint(h))
+    smallrect = mjrRect(Cint(0), Cint(0), Cint(w), Cint(h))
+
+    mjr_render(rect, e.ui.scn, e.ui.con)
+
+    e.ui.showhelp && showhelp!(rect, e)
+    e.ui.showinfo && showinfo!(rect, e)
+
+    # should happen last to include all overlays
+    !isnothing(e.ffmpeghandle) && recordframe!(e, rect)
+
+    GLFW.SwapBuffers(e.mngr.state.window)
+
+    e
 end
 
 function prepare!(e::Engine)
-    ui, p = e.ui, e.phys
-    sim = getsim(p.model)
-    _maybe_reweval!(ui, p.model)
+    ui, phys = e.ui, e.phys
+    _maybe_reweval!(ui, phys.model)
     mjv_updateScene(
-        sim.m,
-        sim.d,
+        getsim(phys.model).m,
+        getsim(phys.model).d,
         ui.vopt,
-        p.pert,
+        phys.pert,
         ui.cam,
         MJCore.mjCAT_ALL,
         ui.scn,
     )
-    prepare!(ui, p, mode(e))
-    return e
-end
+    prepare!(ui, phys, mode(e))
 
-function render(e::Engine)
-    w, h = GLFW.GetFramebufferSize(e.mngr.state.window)
-    rect = mjrRect(Cint(0), Cint(0), Cint(w), Cint(h))
-    mjr_render(rect, e.ui.scn, e.ui.con)
-    e.ui.showinfo && overlay_info(rect, e)
-    GLFW.SwapBuffers(e.mngr.state.window)
-    return
+    e
 end
-
 
 _maybe_reweval!(ui, ::MJSim) = nothing
 function _maybe_reweval!(ui, env::AbstractMuJoCoEnvironment)
-    ui.reward = getreward(env)
-    ui.eval = geteval(env)
-    return ui
+    ui.reward = RENDERGAMMA * ui.reward + (1 - RENDERGAMMA) * getreward(env)
+    ui.eval = RENDERGAMMA * ui.eval + (1 - RENDERGAMMA) * geteval(env)
+    nothing
 end
 
-function runphysics(e::Engine)
+function runmode!(e::Engine)
     p = e.phys
     ui = e.ui
-    minrefreshrate = min(MIN_REFRESHRATE, GetRefreshRate())
+
     resettime!(p) # reset sim and world clocks to 0
 
     try
         while true
-            shouldexit, lastrender, reversed, paused, refrate, = @lock_nofail ui.lock begin
-                ui.shouldexit, ui.lastrender, ui.reversed, ui.paused, ui.refreshrate
+            shouldexit, lastrender, reversed, paused = @lock_nofail ui.lock begin
+                ui.shouldexit, ui.lastrender, ui.reversed, ui.paused
             end
 
             if shouldexit
                 break
-            elseif (time() - lastrender) > 1 / minrefreshrate
+            elseif (time() - lastrender) > 1/MIN_REFRESHRATE
+                # If current refresh rate less than minimum, then yield to give
+                # render thread a chance to acquire lock
                 yield()
                 continue
             else
@@ -234,7 +224,7 @@ function runphysics(e::Engine)
         end
     end
 
-    return
+    nothing
 end
 
 end # module
