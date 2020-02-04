@@ -144,7 +144,7 @@ function runui(e::Engine)
             end
 
             tnow = time()
-            if e.ffmpeghandle !== nothing && tnow - trecord > 1 / e.min_refreshrate
+            if e.ffmpeghandle !== nothing && tnow - trecord > 1 / VIDFPS
                 trecord = tnow
                 recordframe(e)
             end
@@ -197,6 +197,7 @@ end
 function runphysics(e::Engine)
     p = e.phys
     ui = e.ui
+    minrefreshrate = min(MIN_REFRESHRATE, GetRefreshRate())
     resettime!(p) # reset sim and world clocks to 0
 
     try
@@ -207,7 +208,7 @@ function runphysics(e::Engine)
 
             if shouldexit
                 break
-            elseif (time() - lastrender) > 1 / e.min_refreshrate
+            elseif (time() - lastrender) > 1 / minrefreshrate
                 yield()
                 continue
             else

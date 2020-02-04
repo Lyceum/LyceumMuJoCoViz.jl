@@ -168,8 +168,8 @@ function startrecord!(e::Engine)
     SetWindowAttrib(window, GLFW.RESIZABLE, 0)
     w, h = GLFW.GetFramebufferSize(window)
     resize!(e.framebuf, 3 * w * h)
-    e.ffmpeghandle, e.videodst = startffmpeg(w, h, e.min_refreshrate, e.min_refreshrate)
-    @info "Recording video. Window resizing temporarily disabled"
+    e.ffmpeghandle, dst = startffmpeg(w, h)
+    @info "Saving video to $dst. Window resizing temporarily disabled"
     return e
 end
 
@@ -177,26 +177,14 @@ function recordframe(e::Engine)
     w, h = GLFW.GetFramebufferSize(e.mngr.state.window)
     rect = mjrRect(Cint(0), Cint(0), Cint(w), Cint(h))
     mjr_readPixels(e.framebuf, C_NULL, rect, e.ui.con)
-    @async write(e.ffmpeghandle, copy(e.framebuf)) # have to copy b/c of the async
+    write(e.ffmpeghandle, e.framebuf)
     return nothing
 end
 
 function stoprecord!(e::Engine)
-    SetWindowAttrib(e.mngr.state.window, GLFW.RESIZABLE, 1)
-    @info "Recording finished, window resizing re-enabled. Waiting for transcoding to finish."
-    ispaused = e.ui.paused
-    setpause!(e.ui, e.phys, true)
     close(e.ffmpeghandle)
-    @info "Finished recording! Video saved to $(e.videodst)"
+    SetWindowAttrib(e.mngr.state.window, GLFW.RESIZABLE, 1)
     e.ffmpeghandle = nothing
-    e.videodst = nothing
-    setpause!(e.ui, e.phys, ispaused)
+    @info "Finished recording! Window resizing re-enabled."
     return e
-end
-
-
-function setpause!(ui::UIState, p::PhysicsState, status::Bool)
-    status ? stop!(p.timer) : start!(p.timer)
-    ui.paused = status
-    ui
 end

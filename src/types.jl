@@ -54,8 +54,6 @@ mutable struct Engine{T,M}
 
     ffmpeghandle::Maybe{Base.Process}
     framebuf::Vector{UInt8}
-    videodst::Maybe{String}
-    min_refreshrate::Int
 
     function Engine(model::Union{MJSim,AbstractMuJoCoEnvironment}, modes::EngineMode...)
         window = create_window("LyceumMuJoCoViz")
@@ -89,8 +87,6 @@ mutable struct Engine{T,M}
 
                 nothing,
                 UInt8[],
-                nothing,
-                min(map(GetRefreshRate, GLFW.GetMonitors())..., MIN_REFRESHRATE)
             )
 
             e.handlers = handlers(e)
