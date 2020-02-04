@@ -135,12 +135,11 @@ function describe(xs::Union{Key,MouseButton,Mod}...)
     return join(vcat(ms, ks, bs), "+")
 end
 
+@inline isalt(key::Key) = key === GLFW.KEY_LEFT_ALT || key === GLFW.KEY_RIGHT_ALT
+@inline isshift(key::Key) = key === GLFW.KEY_LEFT_SHIFT || key === GLFW.KEY_RIGHT_SHIFT
+@inline iscontrol(key::Key) = key === GLFW.KEY_LEFT_CONTROL || key === GLFW.KEY_RIGHT_CONTROL
+@inline issuper(key::Key) = key === GLFW.KEY_LEFT_SUPER || key === GLFW.KEY_RIGHT_SUPER
 
-####
-#### Events
-####
-
-abstract type Event end
 
 struct KeyEvent <: Event
     key::Key
