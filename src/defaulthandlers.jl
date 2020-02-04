@@ -170,10 +170,7 @@ function handlers(e::Engine)
 
 
             onkey(GLFW.KEY_SPACE, what = "Pause") do s, ev
-                if ispress_or_repeat(ev.action)
-                    ui.paused ? start!(p.timer) : stop!(p.timer)
-                    ui.paused = !ui.paused
-                end
+                ispress_or_repeat(ev.action) && setpause!(ui, p, !ui.paused)
             end,
 
             onevent(
