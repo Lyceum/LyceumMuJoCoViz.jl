@@ -123,6 +123,10 @@ function handlers(e::Engine)
             end,
 
 
+            onkey(GLFW.KEY_ESCAPE, what = "Quit") do s, ev
+                ispress_or_repeat(ev.action) && (ui.shouldexit = true)
+            end,
+
             onkey(GLFW.KEY_F1, what = "Show help message") do s, ev
                 ispress_or_repeat(ev.action) && printhelp(e)
             end,
@@ -131,16 +135,42 @@ function handlers(e::Engine)
                 ispress_or_repeat(ev.action) && (ui.showinfo = !ui.showinfo)
             end,
 
+
+            onkey(GLFW.KEY_F8, what = "Resize window to $RES_XGA (XGA)") do s, ev
+                if ispress(ev.action) && e.ffmpeghandle === nothing
+                    GLFW.SetWindowSize(s.window, RES_XGA...)
+                end
+            end,
+            onkey(GLFW.KEY_F8, MOD_SHIFT, what = "Resize window to $RES_SXGA (SXGA)") do s, ev
+                if ispress(ev.action) && e.ffmpeghandle === nothing
+                    GLFW.SetWindowSize(s.window, RES_SXGA...)
+                end
+            end,
+
+            onkey(GLFW.KEY_F9, what = "Resize window to $RES_HD (HD)") do s, ev
+                if ispress(ev.action) && e.ffmpeghandle === nothing
+                    GLFW.SetWindowSize(s.window, RES_HD...)
+                end
+            end,
+            onkey(GLFW.KEY_F9, MOD_SHIFT, what = "Resize window to $RES_FHD (FHD)") do s, ev
+                if ispress(ev.action) && e.ffmpeghandle === nothing
+                    GLFW.SetWindowSize(s.window, RES_FHD...)
+                end
+            end,
+
+            onkey(GLFW.KEY_F10, what = "Resize window to defaults") do s, ev
+                if ispress(ev.action) && e.ffmpeghandle === nothing
+                    GLFW.SetWindowSize(s.window, default_windowsize()...)
+                end
+            end,
+
             onkey(GLFW.KEY_F11, what = "Toggle fullscreen") do s, ev
-                if ispress_or_repeat(ev.action)
+                if ispress(ev.action) && e.ffmpeghandle === nothing
                     ismin = iszero(GLFW.GetWindowAttrib(s.window, GLFW.MAXIMIZED))
                     ismin ? GLFW.MaximizeWindow(s.window) : GLFW.RestoreWindow(s.window)
                 end
             end,
 
-            onkey(GLFW.KEY_ESCAPE, what = "Quit") do s, ev
-                ispress_or_repeat(ev.action) && (ui.shouldexit = true)
-            end,
 
             onscroll(what = "Zoom camera") do s, ev
                 default_scrollcb(e, s, ev)
@@ -150,7 +180,7 @@ function handlers(e::Engine)
                 ispress_or_repeat(ev.action) && alignscale!(ui, getsim(p.model))
             end,
 
-            onkey(GLFW.KEY_V, what = "Toggle video recording") do s, ev
+            onkey(GLFW.KEY_V, MOD_CONTROL, what = "Toggle video recording") do s, ev
                 if ispress(ev.action)
                     e.ffmpeghandle === nothing ? startrecord!(e) : stoprecord!(e)
                 end
@@ -160,7 +190,7 @@ function handlers(e::Engine)
                 ispress_or_repeat(ev.action) && reset!(p, mode(e))
             end,
 
-            onkey(GLFW.KEY_R, what = "Toggle reverse") do s, ev
+            onkey(GLFW.KEY_R, MOD_CONTROL, what = "Toggle reverse") do s, ev
                 if ispress_or_repeat(ev.action)
                     ui.reversed = !ui.reversed
                     p.timer.rate *= -1
@@ -222,13 +252,13 @@ function handlers(e::Engine)
             end,
 
 
-            onkey(GLFW.KEY_PAGE_UP, what = "Cycle engine mode forward") do s, ev
+            onkey(GLFW.KEY_RIGHT, MOD_CONTROL, what = "Cycle engine mode forward") do s, ev
                 if ispress_or_repeat(ev.action)
                     switchmode!(e, inc(e.curmodeidx, 1, length(e.modes)))
                 end
             end,
 
-            onkey(GLFW.KEY_PAGE_DOWN, what = "Cycle engine mode backwards") do s, ev
+            onkey(GLFW.KEY_LEFT, MOD_CONTROL, what = "Cycle engine mode backwards") do s, ev
                 if ispress_or_repeat(ev.action)
                     switchmode!(e, dec(e.curmodeidx, 1, length(e.modes)))
                 end
@@ -272,7 +302,7 @@ function gen_mjflag_handlers(ui::UIState)
         for i=1:Int(MJCore.mjNVISFLAG)
             key = glfw_lookup_key(MJCore.mjVISSTRING[3, i])
             name = MJCore.mjVISSTRING[1, i]
-            h = onkey(key, MOD_SHIFT, what = "Toggle $name Viz Flag") do s, ev
+            h = onkey(key, what = "Toggle $name Viz Flag") do s, ev
                 ispress_or_repeat(ev.action) && (vopt[].flags = _toggle(vopt[].flags, i))
             end
             push!(handlers, h)
@@ -281,7 +311,7 @@ function gen_mjflag_handlers(ui::UIState)
         for i=1:Int(MJCore.mjNRNDFLAG)
             key = glfw_lookup_key(MJCore.mjRNDSTRING[3, i])
             name = MJCore.mjRNDSTRING[1, i]
-            h = onkey(key, MOD_SHIFT, what = "Toggle $name Render Flag") do s, ev
+            h = onkey(key, what = "Toggle $name Render Flag") do s, ev
                 ispress_or_repeat(ev.action) && (scn[].flags = _toggle(scn[].flags, i))
             end
             push!(handlers, h)

@@ -51,7 +51,7 @@ end
 function default_windowsize()
     vmode = GLFW.GetVideoMode(GLFW.GetPrimaryMonitor())
     w, h = vmode.width, vmode.height
-    return (width = trunc(Int, 2 * w / 3), height = trunc(Int, 2 * h / 3))
+    return (trunc(Int, 2 * w / 3), trunc(Int, 2 * h / 3))
 end
 
 function create_window(width::Integer, height::Integer, title::String)
@@ -62,7 +62,6 @@ function create_window(width::Integer, height::Integer, title::String)
     GLFW.SwapInterval(1)
     return window
 end
-create_window(title::String) = create_window(default_windowsize()..., title)
 
 
 @inline modbits(ms::Tuple{Vararg{Mod}}) = mapreduce(Cint, |, ms)

@@ -28,11 +28,11 @@ end
 @inline inc(x::Integer, min::Integer, max::Integer) = ifelse(x == max, min, x + 1)
 @inline dec(x::Integer, min::Integer, max::Integer) = ifelse(x == min, max, x - 1)
 
-function startffmpeg(w::Integer, h::Integer, rin::Integer, rout::Integer; squashoutput::Bool = true)
+function startffmpeg(w::Integer, h::Integer, rout::Integer; squashoutput::Bool = true)
     w > 0 && h > 0 || error("w and h must be > 0")
 
     dst = tempname() * ".mp4"
-    arg = `-y -f rawvideo -pixel_format rgb24 -video_size $(w)x$(h) -framerate $rin -i pipe:0 -c:v libx264 -preset ultrafast -tune animation -vf "vflip" -r $rout $dst`
+    arg = `-y -f rawvideo -pixel_format rgb24 -video_size $(w)x$(h) -use_wallclock_as_timestamps true -i pipe:0 -c:v libx264 -preset ultrafast -tune animation -vf "vflip" -r $rout $dst`
 
     return withenv(FFMPEG.execenv) do
         in = Base.PipeEndpoint()

@@ -65,10 +65,10 @@ end
 
 
 ####
-#### Playback
+#### Trajectory
 ####
 
-mutable struct Playback{TR<:AbstractVector{<:AbstractMatrix{<:Real}}} <: EngineMode
+mutable struct Trajectory{TR<:AbsVec{<:RealMat}} <: EngineMode
     trajectories::TR
     k::Int
     t::Int
@@ -79,35 +79,36 @@ mutable struct Playback{TR<:AbstractVector{<:AbstractMatrix{<:Real}}} <: EngineM
     bg_idx::Int
     bg_range::LinRange{Float64}
     doppler::Bool
-    function Playback{TR}(trajectories) where {TR<:AbstractVector{<:AbstractMatrix{<:Real}}}
+    function Trajectory{TR}(trajectories) where {TR<:AbsVec{<:RealMat}}
         new{TR}(trajectories, 1, 1, false, 1, LinRange(0, 1, 2), 1, LinRange(0, 1, 2), false)
     end
 end
-Playback(trajectories::AbstractMatrix{<:Real}) = Playback([trajectories])
+Trajectory(trajectories::AbsVec{<:RealMat}) = Trajectory{typeof(trajectories)}(trajectories)
+Trajectory(trajectories::RealMat) = Trajectory([trajectories])
 
 
-function setup!(ui::UIState, p::PhysicsState, m::Playback)
+function setup!(ui::UIState, p::PhysicsState, m::Trajectory)
     setburstmodeparams!(m, p)
     setstate!(m, p)
     return ui
 end
 
-reset!(p::PhysicsState, m::Playback) = (m.t = 1; setstate!(m, p); p)
+reset!(p::PhysicsState, m::Trajectory) = (m.t = 1; setstate!(m, p); p)
 
-function forwardstep!(p::PhysicsState, m::Playback)
+function forwardstep!(p::PhysicsState, m::Trajectory)
     m.t = inc(m.t, 1, getT(m))
     setstate!(m, p)
     return p
 end
 
-supportsreverse(::Playback) = true
-function reversestep!(p::PhysicsState, m::Playback)
+supportsreverse(::Trajectory) = true
+function reversestep!(p::PhysicsState, m::Trajectory)
     m.t = dec(m.t, 1, getT(m))
     setstate!(m, p)
     return p
 end
 
-function prepare!(ui::UIState, p::PhysicsState, m::Playback)
+function prepare!(ui::UIState, p::PhysicsState, m::Trajectory)
     if m.burstmode
         bf = round(Int, m.bf_range[m.bf_idx])
         bg = m.bg_range[m.bg_idx]
@@ -116,7 +117,7 @@ function prepare!(ui::UIState, p::PhysicsState, m::Playback)
     return ui
 end
 
-function modeinfo(io1, io2, ui::UIState, p::PhysicsState, m::Playback)
+function modeinfo(io1, io2, ui::UIState, p::PhysicsState, m::Trajectory)
     println(io1, "t")
     println(io2, "$(m.t)/$(getT(m))")
     println(io1, "k")
@@ -135,7 +136,7 @@ function modeinfo(io1, io2, ui::UIState, p::PhysicsState, m::Playback)
     return nothing
 end
 
-function handlers(ui::UIState, p::PhysicsState, m::Playback)
+function handlers(ui::UIState, p::PhysicsState, m::Trajectory)
     return let ui=ui, p=p, m=m
         [
             onscroll(MOD_CONTROL, what = "Change burst factor") do s, ev
@@ -146,11 +147,11 @@ function handlers(ui::UIState, p::PhysicsState, m::Playback)
                 m.bg_idx = clamp(m.bg_idx + ev.dy, 1, length(m.bg_range))
             end,
 
-            onkey(GLFW.KEY_B, what = "Toggle burst mode") do s, ev
+            onkey(GLFW.KEY_B, MOD_CONTROL, what = "Toggle burst mode") do s, ev
                 ispress_or_repeat(ev.action) && (m.burstmode = !m.burstmode)
             end,
 
-            onkey(GLFW.KEY_D, what = "Toggle burst mode doppler effect") do s, ev
+            onkey(GLFW.KEY_D, MOD_CONTROL, what = "Toggle burst mode doppler effect") do s, ev
                 ispress_or_repeat(ev.action) && (m.doppler = !m.doppler)
             end,
 
@@ -177,7 +178,7 @@ function handlers(ui::UIState, p::PhysicsState, m::Playback)
     end
 end
 
-function setburstmodeparams!(m::Playback, p::PhysicsState)
+function setburstmodeparams!(m::Trajectory, p::PhysicsState)
     steps = 40 # n scroll increments
 
     # Params calibrated on cartpole and scaled accordingly
@@ -203,13 +204,13 @@ function setburstmodeparams!(m::Playback, p::PhysicsState)
     return m
 end
 
-@inline function setstate!(m::Playback, p::PhysicsState)
+@inline function setstate!(m::Trajectory, p::PhysicsState)
     LyceumMuJoCo.setstate!(p.model, view(gettraj(m), :, m.t))
     return m
 end
 
-getT(m::Playback) = size(m.trajectories[m.k], 2)
-gettraj(m::Playback) = m.trajectories[m.k]
+getT(m::Trajectory) = size(m.trajectories[m.k], 2)
+gettraj(m::Trajectory) = m.trajectories[m.k]
 
 
 ####

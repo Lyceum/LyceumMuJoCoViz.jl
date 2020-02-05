@@ -18,7 +18,7 @@ using FFMPEG: FFMPEG
 using MuJoCo, MuJoCo.MJCore
 using LyceumMuJoCo
 import LyceumMuJoCo: reset!
-using LyceumBase: LyceumBase, Maybe, AbsVec, AbsMat
+using LyceumBase: LyceumBase, Maybe, AbsVec, AbsMat, RealMat
 
 
 export visualize
@@ -30,6 +30,11 @@ const MIN_REFRESHRATE = 30 # minimum rate when sim cannot run at the native refr
 const SIMGAMMA = 0.99
 const RNDGAMMA = 0.9
 const VIDFPS = 40
+
+const RES_HD = (1280, 720)
+const RES_FHD = (1920, 1080)
+const RES_XGA = (1024, 768)
+const RES_SXGA = (1280, 1024)
 
 
 include("util.jl")
@@ -60,7 +65,7 @@ always available, while the other modes are specified by the keyword arguments b
 
 # Keywords
 
-- `trajectories::AbstractVector{<:AbstractMatrix}`: a vector of trajectories, where each
+- `trajectories`: a single trajectory or vector of trajectories, where each
     trajectory is an AbstractMatrix of states with size `(length(statespace(model)), T)` and
     `T` is the length of the trajectory. Note that each trajectory can have different length.
 - `controller`: a callback function with the signature `controller(model)`, called at each
@@ -85,15 +90,15 @@ visualize(
 """
 function visualize(
     model::Union{MJSim,AbstractMuJoCoEnvironment};
-    trajectories::Maybe{AbstractVector{<:AbstractMatrix}} = nothing,
+    trajectories::Union{Nothing,RealMat,AbsVec{<:RealMat}},
     controller = nothing,
+    windowsize::NTuple{2,Integer} = default_windowsize()
 )
     modes = EngineMode[PassiveDynamics()]
-    !isnothing(trajectories) && push!(modes, Playback{typeof(trajectories)}(trajectories))
+    !isnothing(trajectories) && push!(modes, Trajectory(trajectories))
     !isnothing(controller) && push!(modes, Controller(controller))
     reset!(model)
-    e = Engine(model, modes...)
-    run(e)
+    run(Engine(windowsize, model, Tuple(modes)))
     return
 end
 

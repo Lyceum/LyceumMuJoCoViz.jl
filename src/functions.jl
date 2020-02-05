@@ -112,6 +112,9 @@ function overlay_info(rect::MJCore.mjrRect, e::Engine)
     println(io1, "Refresh Rate")
     @printf io2 "%d Hz\n" ui.refreshrate
 
+    println(io1, "Resolution")
+    @printf io2 "(%d, %d)\n" e.mngr.state.width e.mngr.state.height
+
     println(io1, "Sim Speed")
     if ui.speedmode
         if ui.speedfactor < 1
@@ -168,7 +171,7 @@ function startrecord!(e::Engine)
     SetWindowAttrib(window, GLFW.RESIZABLE, 0)
     w, h = GLFW.GetFramebufferSize(window)
     resize!(e.framebuf, 3 * w * h)
-    e.ffmpeghandle, e.videodst = startffmpeg(w, h, e.min_refreshrate, e.min_refreshrate)
+    e.ffmpeghandle, e.videodst = startffmpeg(w, h, e.min_refreshrate)
     @info "Recording video. Window resizing temporarily disabled"
     return e
 end
@@ -177,7 +180,7 @@ function recordframe(e::Engine)
     w, h = GLFW.GetFramebufferSize(e.mngr.state.window)
     rect = mjrRect(Cint(0), Cint(0), Cint(w), Cint(h))
     mjr_readPixels(e.framebuf, C_NULL, rect, e.ui.con)
-    @async write(e.ffmpeghandle, copy(e.framebuf)) # have to copy b/c of the async
+    write(e.ffmpeghandle, e.framebuf)
     return nothing
 end
 
@@ -188,8 +191,7 @@ function stoprecord!(e::Engine)
     setpause!(e.ui, e.phys, true)
     close(e.ffmpeghandle)
     @info "Finished recording! Video saved to $(e.videodst)"
-    e.ffmpeghandle = nothing
-    e.videodst = nothing
+    e.ffmpeghandle = e.videodst = nothing
     setpause!(e.ui, e.phys, ispaused)
     return e
 end

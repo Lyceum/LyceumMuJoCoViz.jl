@@ -57,8 +57,8 @@ mutable struct Engine{T,M}
     videodst::Maybe{String}
     min_refreshrate::Int
 
-    function Engine(model::Union{MJSim,AbstractMuJoCoEnvironment}, modes::EngineMode...)
-        window = create_window("LyceumMuJoCoViz")
+    function Engine(windowsize::NTuple{2,Integer}, model::Union{MJSim,AbstractMuJoCoEnvironment}, modes::Tuple{Vararg{EngineMode}})
+        window = create_window(windowsize..., "LyceumMuJoCoViz")
         try
             phys = PhysicsState(model)
             ui = UIState()
@@ -90,7 +90,7 @@ mutable struct Engine{T,M}
                 nothing,
                 UInt8[],
                 nothing,
-                min(map(GetRefreshRate, GLFW.GetMonitors())..., MIN_REFRESHRATE)
+                min(map(GetRefreshRate, GLFW.GetMonitors())..., MIN_REFRESHRATE),
             )
 
             e.handlers = handlers(e)
