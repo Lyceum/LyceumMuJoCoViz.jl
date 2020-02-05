@@ -92,7 +92,7 @@ visualize(
 """
 function visualize(
     model::Union{AbstractString,MJSim,AbstractMuJoCoEnvironment};
-    trajectories::Union{Nothing,RealMat,AbsVec{<:RealMat}},
+    trajectories::Union{Nothing,RealMat,AbsVec{<:RealMat}} = nothing,
     controller = nothing,
     windowsize::NTuple{2,Integer} = default_windowsize()
 )
