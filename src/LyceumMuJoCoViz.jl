@@ -84,7 +84,7 @@ for t = 1:T
 end
 visualize(
     env,
-    trajectories=[states],
+    trajectories = states,
     controller = env -> setaction!(env, rand(actionspace(env)))
 )
 ```
