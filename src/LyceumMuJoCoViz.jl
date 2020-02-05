@@ -70,6 +70,7 @@ always available, while the other modes are specified by the keyword arguments b
     `T` is the length of the trajectory. Note that each trajectory can have different length.
 - `controller`: a callback function with the signature `controller(model)`, called at each
     timestep, that that applys a control input to the system.
+- `windowsize`: resolution of visualizer window. Defaults to internal heuristic.
 
 # Examples
 ```julia
