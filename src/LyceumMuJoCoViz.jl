@@ -57,11 +57,12 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Starts an interactive visualization of `model`, which can be either a valid subtype of
-`AbstractMuJoCoEnvironment` or just a `MJSim` simulation. The visualizer has several
-"modes" that allow you to visualize passive dynamics, play back recorded trajectories, and
-run a controller interactively. The passive dynamics mode depends only on `model` and is
-always available, while the other modes are specified by the keyword arguments below.
+Starts an interactive visualization of `model`, which can be a valid subtype of
+`AbstractMuJoCoEnvironment`, a `MJSim` simulation, or the path to a valid MuJoCo model file.
+The visualizer has several "modes" that allow you to visualize passive dynamics,
+play back recorded trajectories, and run a controller interactively. The passive dynamics
+mode depends only on `model` and is always available, while the other modes are specified
+by the keyword arguments below.
 
 # Keywords
 
@@ -69,8 +70,8 @@ always available, while the other modes are specified by the keyword arguments b
     trajectory is an AbstractMatrix of states with size `(length(statespace(model)), T)` and
     `T` is the length of the trajectory. Note that each trajectory can have different length.
 - `controller`: a callback function with the signature `controller(model)`, called at each
-    timestep, that that applys a control input to the system.
-- `windowsize`: resolution of visualizer window. Defaults to internal heuristic.
+    timestep, that applies a control input to the system.
+- `windowsize`: resolution of visualizer window. Defaults to an internal heuristic.
 
 # Examples
 ```julia
@@ -90,15 +91,18 @@ visualize(
 ```
 """
 function visualize(
-    model::Union{MJSim,AbstractMuJoCoEnvironment};
+    model::Union{AbstractString,MJSim,AbstractMuJoCoEnvironment};
     trajectories::Union{Nothing,RealMat,AbsVec{<:RealMat}},
     controller = nothing,
     windowsize::NTuple{2,Integer} = default_windowsize()
 )
+    model isa AbstractString && (model = MJSim(model))
+    reset!(model)
+
     modes = EngineMode[PassiveDynamics()]
     !isnothing(trajectories) && push!(modes, Trajectory(trajectories))
     !isnothing(controller) && push!(modes, Controller(controller))
-    reset!(model)
+
     run(Engine(windowsize, model, Tuple(modes)))
     return
 end
