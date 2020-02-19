@@ -78,8 +78,7 @@ function default_buttoncb(e::Engine, s::WindowState, ev::ButtonEvent)
 
                 # compute localpos
                 tmp = selpnt - sim.d.xpos[:, selbody+1] # TODO
-                res = reshape(sim.d.xmat[:, selbody+1], 3, 3)' * tmp
-                pert[].localpos = SVector{3}(res)
+                pert[].localpos = reshape(sim.d.xmat[:, selbody+1], 3, 3) * tmp
 
                 # record selection
                 pert[].select = selbody
