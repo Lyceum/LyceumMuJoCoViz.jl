@@ -12,7 +12,7 @@ using BangBang: @set!!
 using StaticArrays: SVector, MVector
 using DocStringExtensions
 using Observables: AbstractObservable, Observable, on, off
-using FFMPEG: FFMPEG
+using FFMPEG
 
 # Lyceum
 using MuJoCo, MuJoCo.MJCore
