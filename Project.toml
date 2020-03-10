@@ -18,6 +18,17 @@ Shapes = "175de200-b73b-11e9-28b7-9b5b306cec37"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
+BangBang = "0.3"
+DocStringExtensions = "0.8"
+FFMPEG = "0.3"
+GLFW = "3.2"
+LyceumBase = "0.2"
+LyceumMuJoCo = "0.2"
+MuJoCo = "0.3"
+Observables = "0.3"
+PrettyTables = "0.8"
+Shapes = "0.2"
+StaticArrays = "0.12"
 julia = "1.3"
 
 [extras]
