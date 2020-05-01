@@ -31,7 +31,6 @@ Base.@kwdef mutable struct UIState
     shouldexit::Bool = false
 
     reward::Float64 = 0
-    eval::Float64 = 0
 
     lastrender::Float64 = 0
     refreshrate::Float64 = 0

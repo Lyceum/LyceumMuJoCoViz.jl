@@ -18,7 +18,7 @@ using FFMPEG
 using MuJoCo, MuJoCo.MJCore
 using LyceumMuJoCo
 import LyceumMuJoCo: reset!
-using LyceumBase: LyceumBase, Maybe, AbsVec, AbsMat, RealMat
+using LyceumBase: LyceumBase, Maybe, AbsVec, AbsMat
 
 
 export visualize
@@ -92,7 +92,7 @@ visualize(
 """
 function visualize(
     model::Union{AbstractString,MJSim,AbstractMuJoCoEnvironment};
-    trajectories::Union{Nothing,RealMat,AbsVec{<:RealMat}} = nothing,
+    trajectories::Union{Nothing,AbsMat,AbsVec{<:AbsMat}} = nothing,
     controller = nothing,
     windowsize::NTuple{2,Integer} = default_windowsize()
 )
@@ -111,7 +111,6 @@ end
 function run(e::Engine)
     if e.phys.model isa AbstractMuJoCoEnvironment
         e.ui.reward = getreward(e.phys.model)
-        e.ui.eval = geteval(e.phys.model)
     end
 
     # render first frame before opening window
@@ -173,7 +172,7 @@ end
 function prepare!(e::Engine)
     ui, p = e.ui, e.phys
     sim = getsim(p.model)
-    _maybe_reweval!(ui, p.model)
+    p.model isa AbstractMuJoCoEnvironment && (ui.reward = getreward(p.model))
     mjv_updateScene(
         sim.m,
         sim.d,
@@ -196,13 +195,6 @@ function render(e::Engine)
     return
 end
 
-
-_maybe_reweval!(ui, ::MJSim) = nothing
-function _maybe_reweval!(ui, env::AbstractMuJoCoEnvironment)
-    ui.reward = getreward(env)
-    ui.eval = geteval(env)
-    return ui
-end
 
 function runphysics(e::Engine)
     p = e.phys

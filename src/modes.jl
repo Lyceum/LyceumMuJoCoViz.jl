@@ -68,7 +68,7 @@ end
 #### Trajectory
 ####
 
-mutable struct Trajectory{TR<:AbsVec{<:RealMat}} <: EngineMode
+mutable struct Trajectory{TR<:AbsVec{<:AbsMat}} <: EngineMode
     trajectories::TR
     k::Int
     t::Int
@@ -79,12 +79,12 @@ mutable struct Trajectory{TR<:AbsVec{<:RealMat}} <: EngineMode
     bg_idx::Int
     bg_range::LinRange{Float64}
     doppler::Bool
-    function Trajectory{TR}(trajectories) where {TR<:AbsVec{<:RealMat}}
+    function Trajectory{TR}(trajectories) where {TR<:AbsVec{<:AbsMat}}
         new{TR}(trajectories, 1, 1, false, 1, LinRange(0, 1, 2), 1, LinRange(0, 1, 2), false)
     end
 end
-Trajectory(trajectories::AbsVec{<:RealMat}) = Trajectory{typeof(trajectories)}(trajectories)
-Trajectory(trajectories::RealMat) = Trajectory([trajectories])
+Trajectory(trajectories::AbsVec{<:AbsMat}) = Trajectory{typeof(trajectories)}(trajectories)
+Trajectory(trajectories::AbsMat) = Trajectory([trajectories])
 
 
 function setup!(ui::UIState, p::PhysicsState, m::Trajectory)

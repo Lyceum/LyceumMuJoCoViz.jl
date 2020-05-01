@@ -140,9 +140,6 @@ function overlay_info(rect::MJCore.mjrRect, e::Engine)
 
         println(io1, "Reward")
         @printf io2 "%.5g\n" ui.reward
-
-        println(io1, "Eval")
-        @printf io2 "%.5g\n" ui.eval
     end
 
     # mode specific info

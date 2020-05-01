@@ -1,3 +1,5 @@
 [deps]
+LyceumBase = "db31fed1-ca1e-4084-8a49-12fae1996a55"
+LyceumMuJoCo = "48b9757e-04b8-4dbf-b6ed-75c13d9e4026"
 LyceumMuJoCoViz = "409fd311-7925-44f6-a514-6be572b34fdd"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
