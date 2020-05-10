@@ -1,7 +1,7 @@
 name = "LyceumMuJoCoViz"
 uuid = "409fd311-7925-44f6-a514-6be572b34fdd"
 authors = ["Colin Summers", "The Contributors of LyceumMuJoCoViz"]
-version = "0.2.4"
+version = "0.3.0-DEV"
 
 [deps]
 BangBang = "198e06fe-97b7-11e9-32a5-e1d131e6ad66"
