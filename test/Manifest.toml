@@ -199,9 +199,9 @@ uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 
 [[FillArrays]]
 deps = ["LinearAlgebra", "Random", "SparseArrays"]
-git-tree-sha1 = "5322d34d7600d3429665b37bcf7628dc602a28cc"
+git-tree-sha1 = "6c89d5b673e59b8173c546c84127e5f623d865f6"
 uuid = "1a297f60-69ca-5386-bcde-b61e274b549b"
-version = "0.8.8"
+version = "0.8.9"
 
 [[Formatting]]
 deps = ["Printf"]
@@ -386,7 +386,7 @@ uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 
 [[LyceumBase]]
 deps = ["Adapt", "AutoHashEquals", "BangBang", "Dates", "Distributions", "DocStringExtensions", "ElasticArrays", "Future", "LinearAlgebra", "MacroTools", "Parameters", "Pkg", "Printf", "Random", "Setfield", "Shapes", "SpecialArrays", "StaticArrays", "StructArrays", "UnicodePlots", "UnsafeArrays"]
-git-tree-sha1 = "a75c661dbb565a57dd41e9e1bb7b9840bc20131e"
+git-tree-sha1 = "fa5e089255cf8beee9f56a762a022cb4fa402b12"
 repo-rev = "master"
 repo-url = "https://github.com/Lyceum/LyceumBase.jl.git"
 uuid = "db31fed1-ca1e-4084-8a49-12fae1996a55"
@@ -406,7 +406,7 @@ version = "0.5.2"
 
 [[LyceumMuJoCo]]
 deps = ["Distances", "Distributions", "DocStringExtensions", "LinearAlgebra", "LyceumBase", "LyceumCore", "LyceumDevTools", "MuJoCo", "Random", "Reexport", "Shapes", "StaticArrays", "Statistics", "UnsafeArrays"]
-git-tree-sha1 = "024ae9565f5e29b21b6b93b9741527620b70a540"
+git-tree-sha1 = "18c58a3767ee2487641d1bf1981fcb540cb34cd1"
 repo-rev = "master"
 repo-url = "https://github.com/Lyceum/LyceumMuJoCo.jl.git"
 uuid = "48b9757e-04b8-4dbf-b6ed-75c13d9e4026"
@@ -416,7 +416,7 @@ version = "0.3.0-DEV"
 deps = ["BangBang", "DocStringExtensions", "FFMPEG", "GLFW", "LyceumBase", "LyceumMuJoCo", "MuJoCo", "Observables", "PrettyTables", "Printf", "Shapes", "StaticArrays"]
 path = ".."
 uuid = "409fd311-7925-44f6-a514-6be572b34fdd"
-version = "0.2.4"
+version = "0.3.0-DEV"
 
 [[MacroTools]]
 deps = ["Markdown", "Random"]
@@ -660,7 +660,7 @@ uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [[SpecialArrays]]
 deps = ["Adapt", "Compat", "DocStringExtensions", "Requires", "UnsafeArrays", "Zygote"]
-git-tree-sha1 = "62c075596fecbcba4a42df42148ac934225e20a3"
+git-tree-sha1 = "48fde15f8f0f388cc5419b335bf477858d49a1c8"
 repo-rev = "master"
 repo-url = "https://github.com/Lyceum/SpecialArrays.jl.git"
 uuid = "dced3ab1-7816-4ad4-9c7c-956aa26e9cbf"
