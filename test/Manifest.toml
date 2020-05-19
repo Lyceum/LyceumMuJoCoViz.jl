@@ -385,8 +385,8 @@ uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 
 [[LyceumBase]]
-deps = ["Adapt", "AutoHashEquals", "BangBang", "Dates", "Distributions", "DocStringExtensions", "ElasticArrays", "Future", "LinearAlgebra", "MacroTools", "Parameters", "Pkg", "Printf", "Random", "Setfield", "Shapes", "SpecialArrays", "StaticArrays", "StructArrays", "UnicodePlots", "UnsafeArrays"]
-git-tree-sha1 = "fa5e089255cf8beee9f56a762a022cb4fa402b12"
+deps = ["Adapt", "AutoHashEquals", "BangBang", "Dates", "Distributions", "DocStringExtensions", "ElasticArrays", "Future", "IterTools", "LinearAlgebra", "MacroTools", "Parameters", "Pkg", "Printf", "Random", "Setfield", "Shapes", "SpecialArrays", "StaticArrays", "StructArrays", "UnicodePlots", "UnsafeArrays"]
+git-tree-sha1 = "0dd0b6ff7c2f81ab08d37a6fb014fe5b96784c7f"
 repo-rev = "master"
 repo-url = "https://github.com/Lyceum/LyceumBase.jl.git"
 uuid = "db31fed1-ca1e-4084-8a49-12fae1996a55"
@@ -405,8 +405,8 @@ uuid = "fd23256c-5a67-41c4-8f5a-c8cf5526e505"
 version = "0.5.2"
 
 [[LyceumMuJoCo]]
-deps = ["Distances", "Distributions", "DocStringExtensions", "LinearAlgebra", "LyceumBase", "LyceumCore", "LyceumDevTools", "MuJoCo", "Random", "Reexport", "Shapes", "StaticArrays", "Statistics", "UnsafeArrays"]
-git-tree-sha1 = "18c58a3767ee2487641d1bf1981fcb540cb34cd1"
+deps = ["Distances", "Distributions", "DocStringExtensions", "LinearAlgebra", "LyceumBase", "MuJoCo", "Random", "Reexport", "Shapes", "StaticArrays", "Statistics", "UnsafeArrays"]
+git-tree-sha1 = "29c3b07f80bdfd05edb9b8b58b81d7e25195f866"
 repo-rev = "master"
 repo-url = "https://github.com/Lyceum/LyceumMuJoCo.jl.git"
 uuid = "48b9757e-04b8-4dbf-b6ed-75c13d9e4026"
@@ -637,9 +637,11 @@ version = "0.6.0"
 
 [[Shapes]]
 deps = ["Adapt", "MacroTools", "Random", "Requires", "StaticArrays", "UnsafeArrays"]
-git-tree-sha1 = "12588058c4dc3590d8d19d5071e140d9b8924854"
+git-tree-sha1 = "a25a1183ae53fc6381c5d1d8070a740ff7098dc9"
+repo-rev = "master"
+repo-url = "https://github.com/Lyceum/Shapes.jl.git"
 uuid = "175de200-b73b-11e9-28b7-9b5b306cec37"
-version = "0.2.3"
+version = "0.3.0-DEV"
 
 [[SharedArrays]]
 deps = ["Distributed", "Mmap", "Random", "Serialization"]
