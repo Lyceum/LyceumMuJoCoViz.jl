@@ -235,6 +235,7 @@ function runphysics(e::Engine)
                         p.elapsedsim += timestep(p.model)
                     end
                 end
+                yield()
             end
         end
     finally
