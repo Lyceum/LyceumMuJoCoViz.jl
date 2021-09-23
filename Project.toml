@@ -1,7 +1,7 @@
 name = "LyceumMuJoCoViz"
 uuid = "409fd311-7925-44f6-a514-6be572b34fdd"
 authors = ["Colin Summers", "The Contributors of LyceumMuJoCoViz"]
-version = "0.2.5"
+version = "0.2.6"
 
 [deps]
 BangBang = "198e06fe-97b7-11e9-32a5-e1d131e6ad66"
@@ -18,17 +18,10 @@ Shapes = "175de200-b73b-11e9-28b7-9b5b306cec37"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
-BangBang = "0.3.14"
-DocStringExtensions = "0.8.1"
-FFMPEG = "0.2.4"
-GLFW = "3.2.1"
 LyceumBase = "0.2"
 LyceumMuJoCo = "0.2"
 MuJoCo = "0.3"
-Observables = "0.2.3"
 Shapes = "0.2"
-StaticArrays = "0.12.1"
-julia = "1.3"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

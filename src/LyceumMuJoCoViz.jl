@@ -12,7 +12,7 @@ using BangBang: @set!!
 using StaticArrays: SVector, MVector
 using DocStringExtensions
 using Observables: AbstractObservable, Observable, on, off
-using FFMPEG: FFMPEG
+using FFMPEG
 
 # Lyceum
 using MuJoCo, MuJoCo.MJCore
@@ -48,7 +48,7 @@ include("defaulthandlers.jl")
 
 function __init__()
     if Threads.nthreads() == 1
-        @warn "LyceumMuJoCoViz is designed to run multi-threaded, but the current Julia session was started with only one thread. Degraded performance will occur. To enable multi-threading, set JULIA_NUM_THREADS to a value greater than 1 before starting Julia."
+        @warn "LyceumMuJoCoViz is designed to run multi-threaded, but the current Julia session was started with only one thread. Degraded performance can occur. To enable multi-threading, set JULIA_NUM_THREADS to a value greater than 1 before starting Julia."
     end
     return
 end
@@ -122,13 +122,18 @@ function run(e::Engine)
     GLFW.ShowWindow(e.mngr.state.window)
 
     # run the simulation/mode in second thread
-    modetask = Threads.@spawn runphysics(e)
-
     println(ASCII)
     println("Press \"F1\" to show the help message.")
 
-    runui(e)
+    if Threads.nthreads() == 1
+        modetask = @async runphysics(e)
+    else
+        modetask = Threads.@spawn runphysics(e)
+    end
+
+    uitask = @async runui(e)
     wait(modetask)
+    wait(uitask)
     return
 end
 
@@ -146,7 +151,7 @@ function runui(e::Engine)
             render(e)
             trender = time()
 
-            rt = 1 / (trender - e.ui.lastrender)
+            rt = 1.0 / (trender - e.ui.lastrender)
             @lock e.ui.lock begin
                 e.ui.refreshrate = RNDGAMMA * e.ui.refreshrate + (1 - RNDGAMMA) * rt
                 e.ui.lastrender = trender

@@ -34,16 +34,16 @@ function startffmpeg(w::Integer, h::Integer, rout::Integer; squashoutput::Bool =
     dst = tempname() * ".mp4"
     arg = `-y -f rawvideo -pixel_format rgb24 -video_size $(w)x$(h) -use_wallclock_as_timestamps true -i pipe:0 -c:v libx264 -preset ultrafast -tune animation -vf "vflip" -r $rout $dst`
 
-    return withenv(FFMPEG.execenv) do
-        in = Base.PipeEndpoint()
-        if squashoutput
-            p = Base._spawn(`$(FFMPEG.ffmpeg) $arg`, Any[in, devnull, devnull])
-        else
-            p = Base._spawn(`$(FFMPEG.ffmpeg) $arg`, Any[in, stdout, stderr])
-        end
-        p.in = in
-        return p, dst
+    #return withenv(FFMPEG.ffmpeg()) do
+    in = Base.PipeEndpoint()
+    if squashoutput
+        p = @ffmpeg_env Base._spawn(`$(FFMPEG.ffmpeg) $arg`, Any[in, devnull, devnull])
+    else
+        p = @ffmpeg_env Base._spawn(`$(FFMPEG.ffmpeg) $arg`, Any[in, stdout, stderr])
     end
+    p.in = in
+    return p, dst
+    #end
 end
 
 function safe_unlock(lck::ReentrantLock)
