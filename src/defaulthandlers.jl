@@ -124,7 +124,10 @@ function handlers(e::Engine)
 
 
             onkey(GLFW.KEY_ESCAPE, what = "Quit") do s, ev
-                ispress_or_repeat(ev.action) && (ui.shouldexit = true)
+                if ispress_or_repeat(ev.action) 
+                    e.ffmpeghandle !== nothing && stoprecord!(e)
+                    ui.shouldexit = true
+                end
             end,
 
             onkey(GLFW.KEY_F1, what = "Show help message") do s, ev

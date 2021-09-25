@@ -159,7 +159,7 @@ function runui(e::Engine)
             end
 
             tnow = time()
-            if e.ffmpeghandle !== nothing && tnow - trecord > 1 / e.min_refreshrate
+            if e.ffmpeghandle !== nothing #&& tnow - trecord > 1 / e.min_refreshrate
                 trecord = tnow
                 recordframe(e)
             end
@@ -201,7 +201,6 @@ function render(e::Engine)
     return
 end
 
-
 _maybe_reweval!(ui, ::MJSim) = nothing
 function _maybe_reweval!(ui, env::AbstractMuJoCoEnvironment)
     ui.reward = getreward(env)
@@ -222,26 +221,25 @@ function runphysics(e::Engine)
 
             if shouldexit
                 break
-            elseif (time() - lastrender) > 1 / e.min_refreshrate
-                yield()
-                continue
             else
                 @lock p.lock begin
                     elapsedworld = time(p.timer)
 
                     # advance sim
-                    if ui.paused
+                    if paused
                         pausestep!(p, mode(e))
-                    elseif ui.reversed && p.elapsedsim > elapsedworld
-                        reversestep!(p, mode(e))
-                        p.elapsedsim -= timestep(p.model)
-                    elseif !ui.reversed && p.elapsedsim < elapsedworld
-                        forwardstep!(p, mode(e))
-                        p.elapsedsim += timestep(p.model)
+                    else
+                        dt = reversed ? p.elapsedsim - elapsedworld : elapsedworld - p.elapsedsim
+                        n = ceil(Int, dt / timestep(p.model))
+                        for i=1:n
+                            reversed ? reversestep!(p, mode(e)) : forwardstep!(p, mode(e))
+                        end
+                        p.elapsedsim += (reversed ? -n : n) * timestep(p.model)
                     end
                 end
-                yield()
             end
+
+            yield()
         end
     finally
         @lock ui.lock begin
